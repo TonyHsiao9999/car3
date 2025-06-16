@@ -21,7 +21,7 @@ async function bookCar() {
     
     // 輸入密碼
     await page.waitForSelector('input#password');
-    await page.type('input#password', process.env.PASSWORD);
+    await page.type('input#password', process.env.CAR_BOOKING_PASSWORD);
     
     // 點擊確認按鈕
     await page.click('a.button-fill:nth-child(2)');

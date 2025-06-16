@@ -6,5 +6,11 @@
   },
   "deploy": {
     "startCommand": "npm start"
+  },
+  "env": {
+    "ID_NUMBER": "A102574899",
+    "CAR_BOOKING_PASSWORD": "visi319VISI",
+    "PICKUP_LOCATION": "亞東紀念醫院",
+    "DROP_OFF_ADDRESS": "新北市板橋區中正路1巷18號"
   }
 } 
