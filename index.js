@@ -95,8 +95,8 @@ async function bookCar() {
   }
 }
 
-// 設定每週一和週四凌晨執行
-cron.schedule('0 0 0 * * 1,4', () => {
+// 設定 cron 工作，每週一和週四凌晨執行
+cron.schedule('0 0 0 * * 1,4', async () => {
   console.log('開始執行排程任務...');
   bookCar();
 });
