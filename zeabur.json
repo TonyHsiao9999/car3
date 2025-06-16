@@ -1,0 +1,10 @@
+{
+  "name": "car-booking-automation",
+  "type": "node",
+  "build": {
+    "command": "npm install"
+  },
+  "deploy": {
+    "startCommand": "npm start"
+  }
+} 

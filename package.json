@@ -1,0 +1,14 @@
+{
+  "name": "car-booking-automation",
+  "version": "1.0.0",
+  "description": "自動預約長照接送服務",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "node-cron": "^3.0.0",
+    "dotenv": "^16.0.0"
+  }
+} 
