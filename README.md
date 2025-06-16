@@ -1,28 +1,29 @@
-# 長照接送預約自動化
+# 長照訂車自動化腳本
 
-這個專案使用 Node.js 和 Puppeteer 來自動化預約長照接送服務的流程。
+這個專案是一個自動化腳本，用於預約長照接送服務。
 
-## 功能特點
+## 環境變數設定
 
-- 自動在每週一和週四凌晨執行預約
-- 使用 Puppeteer 進行網頁自動化操作
-- 支援環境變數配置
-- 錯誤處理和日誌記錄
+在 Zeabur 的環境變數設定中，需要設定以下變數：
 
-## 安裝步驟
+- `CAR_BOOKING_ID`: 身分證字號
+- `CAR_BOOKING_PASSWORD`: 密碼
+
+## 排程設定
+
+腳本會自動在每週一和週四的午夜（00:00）執行。
+
+## 本地開發
 
 1. 安裝依賴：
 ```bash
 npm install
 ```
 
-2. 設定環境變數：
-複製 `.env.example` 到 `.env` 並填入以下資訊：
+2. 建立 `.env` 檔案並設定環境變數：
 ```
-ID_NUMBER=你的身分證字號
-PASSWORD=你的密碼
-PICKUP_LOCATION=上車地點
-DROP_OFF_ADDRESS=下車地址
+CAR_BOOKING_ID=你的身分證字號
+CAR_BOOKING_PASSWORD=你的密碼
 ```
 
 3. 執行腳本：
@@ -32,10 +33,11 @@ npm start
 
 ## 部署到 Zeabur
 
-1. 在 Zeabur 上建立新的 Node.js 專案
-2. 將程式碼推送到 Git 倉庫
-3. 在 Zeabur 專案設定中設定環境變數
-4. 部署專案
+1. 將程式碼推送到 GitHub 倉庫
+2. 在 Zeabur 中建立新專案
+3. 選擇 GitHub 倉庫
+4. 設定環境變數
+5. 部署專案
 
 ## 注意事項
 
