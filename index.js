@@ -137,6 +137,123 @@ async function bookCar() {
         console.log('等待頁面載入完成...');
         await page.waitForTimeout(5000);
 
+        // 檢查是否在預約頁面
+        let isBookingPage = await page.evaluate(() => {
+            return document.querySelector('#pickUp_location') !== null ||
+                   document.querySelector('select[name="pickUp_location"]') !== null ||
+                   document.querySelector('input[name="pickUp_location"]') !== null;
+        });
+
+        if (!isBookingPage) {
+            console.log('不在預約頁面，嘗試點擊民眾登入按鈕...');
+            
+            // 等待按鈕出現並可點擊
+            await page.waitForSelector('a.link.panel-close.user_login', {
+                visible: true,
+                timeout: 5000
+            }).catch(() => console.log('等待民眾登入按鈕超時'));
+            
+            // 確保按鈕可見且可點擊
+            const isButtonClickable = await page.evaluate(() => {
+                const button = document.querySelector('a.link.panel-close.user_login');
+                if (!button) return false;
+                
+                const style = window.getComputedStyle(button);
+                return style.display !== 'none' && 
+                       style.visibility !== 'hidden' && 
+                       style.opacity !== '0' &&
+                       !button.disabled;
+            });
+            
+            if (isButtonClickable) {
+                // 使用 JavaScript 點擊按鈕
+                await page.evaluate(() => {
+                    const button = document.querySelector('a.link.panel-close.user_login');
+                    if (button) button.click();
+                });
+                console.log('已點擊民眾登入按鈕！');
+                
+                // 等待頁面導航完成
+                await page.waitForNavigation({ 
+                    waitUntil: 'networkidle0',
+                    timeout: 30000 
+                }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                
+                // 等待一段時間讓頁面完全載入
+                await page.waitForTimeout(5000);
+                
+                // 等待並輸入帳號密碼
+                console.log('等待帳號密碼輸入框出現...');
+                await page.waitForSelector('input[name="IDNumber"]', {
+                    visible: true,
+                    timeout: 5000
+                }).catch(() => console.log('等待帳號輸入框超時'));
+                
+                await page.waitForSelector('input[name="password"]', {
+                    visible: true,
+                    timeout: 5000
+                }).catch(() => console.log('等待密碼輸入框超時'));
+                
+                // 輸入帳號密碼
+                await page.type('input[name="IDNumber"]', ID_NUMBER);
+                await page.type('input[name="password"]', PASSWORD);
+                console.log('已輸入帳號密碼！');
+                
+                // 等待並點擊確認按鈕
+                console.log('等待確認按鈕出現...');
+                await page.waitForSelector('a.button-fill.button-large.color_deep_main', {
+                    visible: true,
+                    timeout: 5000
+                }).catch(() => console.log('等待確認按鈕超時'));
+                
+                // 確保確認按鈕可見且可點擊
+                const isConfirmButtonClickable = await page.evaluate(() => {
+                    const button = document.querySelector('a.button-fill.button-large.color_deep_main');
+                    if (!button) return false;
+                    
+                    const style = window.getComputedStyle(button);
+                    return style.display !== 'none' && 
+                           style.visibility !== 'hidden' && 
+                           style.opacity !== '0' &&
+                           !button.disabled;
+                });
+                
+                if (isConfirmButtonClickable) {
+                    // 使用 JavaScript 點擊確認按鈕
+                    await page.evaluate(() => {
+                        const button = document.querySelector('a.button-fill.button-large.color_deep_main');
+                        if (button) button.click();
+                    });
+                    console.log('已點擊確認按鈕！');
+                    
+                    // 等待頁面導航完成
+                    await page.waitForNavigation({ 
+                        waitUntil: 'networkidle0',
+                        timeout: 30000 
+                    }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                    
+                    // 等待一段時間讓頁面完全載入
+                    await page.waitForTimeout(5000);
+                    
+                    // 再次檢查是否在預約頁面
+                    isBookingPage = await page.evaluate(() => {
+                        return document.querySelector('#pickUp_location') !== null ||
+                               document.querySelector('select[name="pickUp_location"]') !== null ||
+                               document.querySelector('input[name="pickUp_location"]') !== null;
+                    });
+                    
+                    if (isBookingPage) {
+                        console.log('成功進入預約頁面！');
+                        return;
+                    }
+                } else {
+                    console.log('確認按鈕不可點擊');
+                }
+            } else {
+                console.log('民眾登入按鈕不可點擊');
+            }
+        }
+
         // 點擊預約連結
         console.log('點擊預約連結...');
         await retry(async () => {
@@ -208,7 +325,7 @@ async function bookCar() {
                 await page.waitForTimeout(5000);
                 
                 // 檢查是否在預約頁面
-                const isBookingPage = await page.evaluate(() => {
+                isBookingPage = await page.evaluate(() => {
                     return document.querySelector('#pickUp_location') !== null ||
                            document.querySelector('select[name="pickUp_location"]') !== null ||
                            document.querySelector('input[name="pickUp_location"]') !== null;
@@ -254,7 +371,7 @@ async function bookCar() {
                         
                         // 等待並輸入帳號密碼
                         console.log('等待帳號密碼輸入框出現...');
-                        await page.waitForSelector('input[name="account"]', {
+                        await page.waitForSelector('input[name="IDNumber"]', {
                             visible: true,
                             timeout: 5000
                         }).catch(() => console.log('等待帳號輸入框超時'));
@@ -265,7 +382,7 @@ async function bookCar() {
                         }).catch(() => console.log('等待密碼輸入框超時'));
                         
                         // 輸入帳號密碼
-                        await page.type('input[name="account"]', ID_NUMBER);
+                        await page.type('input[name="IDNumber"]', ID_NUMBER);
                         await page.type('input[name="password"]', PASSWORD);
                         console.log('已輸入帳號密碼！');
                         
@@ -306,7 +423,7 @@ async function bookCar() {
                             await page.waitForTimeout(5000);
                             
                             // 再次檢查是否在預約頁面
-                            const isBookingPage = await page.evaluate(() => {
+                            isBookingPage = await page.evaluate(() => {
                                 return document.querySelector('#pickUp_location') !== null ||
                                        document.querySelector('select[name="pickUp_location"]') !== null ||
                                        document.querySelector('input[name="pickUp_location"]') !== null;
@@ -335,7 +452,7 @@ async function bookCar() {
         await page.waitForTimeout(5000); // 先等待 5 秒
         
         // 檢查是否在預約頁面
-        const isBookingPage = await page.evaluate(() => {
+        isBookingPage = await page.evaluate(() => {
             return document.querySelector('#pickUp_location') !== null ||
                    document.querySelector('select[name="pickUp_location"]') !== null ||
                    document.querySelector('input[name="pickUp_location"]') !== null;
@@ -348,13 +465,13 @@ async function bookCar() {
             await page.waitForTimeout(5000);
             
             // 再次檢查是否在預約頁面
-            const isBookingPageAfterReload = await page.evaluate(() => {
+            isBookingPage = await page.evaluate(() => {
                 return document.querySelector('#pickUp_location') !== null ||
                        document.querySelector('select[name="pickUp_location"]') !== null ||
                        document.querySelector('input[name="pickUp_location"]') !== null;
             });
             
-            if (!isBookingPageAfterReload) {
+            if (!isBookingPage) {
                 throw new Error('無法進入預約頁面');
             }
         }
