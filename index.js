@@ -50,7 +50,13 @@ async function retry(fn, retries = MAX_RETRIES) {
 
 async function bookCar() {
     console.log('\n開始執行預約流程...\n');
-    console.log(`使用帳號： ${ID_NUMBER}\n`);
+    
+    // 檢查環境變數
+    if (!process.env.USER_ID || !process.env.USER_PASSWORD) {
+        throw new Error('請設定 USER_ID 和 USER_PASSWORD 環境變數');
+    }
+    
+    console.log(`使用帳號： ${process.env.USER_ID}\n`);
 
     const browser = await puppeteer.launch({
         headless: 'new',
@@ -121,8 +127,16 @@ async function bookCar() {
 
         // 填入登入表單
         console.log('填入登入表單...\n');
-        await page.type('input[name="IDNumber"]', process.env.USER_ID);
-        await page.type('input[name="password"]', process.env.USER_PASSWORD);
+        const userId = process.env.USER_ID.toString();
+        const userPassword = process.env.USER_PASSWORD.toString();
+        
+        await page.evaluate((id, pwd) => {
+            const idInput = document.querySelector('input[name="IDNumber"]');
+            const pwdInput = document.querySelector('input[name="password"]');
+            if (idInput) idInput.value = id;
+            if (pwdInput) pwdInput.value = pwd;
+        }, userId, userPassword);
+        
         await page.waitForTimeout(1000);
 
         // 確認帳號密碼是否確實填入
@@ -135,7 +149,7 @@ async function bookCar() {
             return input ? input.value : '';
         });
 
-        if (idNumberValue !== process.env.USER_ID || passwordValue !== process.env.USER_PASSWORD) {
+        if (idNumberValue !== userId || passwordValue !== userPassword) {
             console.log('帳號密碼未正確填入，重試中...\n');
             // 清空輸入框
             await page.evaluate(() => {
@@ -147,8 +161,13 @@ async function bookCar() {
             await page.waitForTimeout(1000);
 
             // 重新填入
-            await page.type('input[name="IDNumber"]', process.env.USER_ID);
-            await page.type('input[name="password"]', process.env.USER_PASSWORD);
+            await page.evaluate((id, pwd) => {
+                const idInput = document.querySelector('input[name="IDNumber"]');
+                const pwdInput = document.querySelector('input[name="password"]');
+                if (idInput) idInput.value = id;
+                if (pwdInput) pwdInput.value = pwd;
+            }, userId, userPassword);
+            
             await page.waitForTimeout(1000);
 
             // 再次確認
@@ -161,7 +180,7 @@ async function bookCar() {
                 return input ? input.value : '';
             });
 
-            if (retryIdNumberValue !== process.env.USER_ID || retryPasswordValue !== process.env.USER_PASSWORD) {
+            if (retryIdNumberValue !== userId || retryPasswordValue !== userPassword) {
                 throw new Error('無法正確填入帳號密碼');
             }
         }
