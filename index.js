@@ -51,12 +51,11 @@ async function retry(fn, retries = MAX_RETRIES) {
 async function bookCar() {
     console.log('\n開始執行預約流程...\n');
     
-    // 檢查環境變數
-    if (!process.env.USER_ID || !process.env.USER_PASSWORD) {
-        throw new Error('請設定 USER_ID 和 USER_PASSWORD 環境變數');
-    }
+    // 設定帳號密碼
+    const userId = 'A102574899';
+    const userPassword = 'visi319VISI';
     
-    console.log(`使用帳號： ${process.env.USER_ID}\n`);
+    console.log(`使用帳號： ${userId}\n`);
 
     const browser = await puppeteer.launch({
         headless: 'new',
@@ -127,9 +126,6 @@ async function bookCar() {
 
         // 填入登入表單
         console.log('填入登入表單...\n');
-        const userId = process.env.USER_ID.toString();
-        const userPassword = process.env.USER_PASSWORD.toString();
-        
         await page.evaluate((id, pwd) => {
             const idInput = document.querySelector('input[name="IDNumber"]');
             const pwdInput = document.querySelector('input[name="password"]');
