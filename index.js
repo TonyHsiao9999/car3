@@ -269,13 +269,28 @@ async function bookCar() {
               try {
                 console.log(`嘗試尋找按鈕：${selector}\n`);
                 const buttons = await page.$$(selector);
+                console.log(`找到 ${buttons.length} 個按鈕\n`);
                 
                 for (const button of buttons) {
-                  const buttonText = await page.evaluate(el => el.textContent.trim(), button);
-                  console.log(`找到按鈕，文字為：${buttonText}\n`);
+                  const buttonInfo = await page.evaluate(el => {
+                    return {
+                      text: el.textContent.trim(),
+                      tagName: el.tagName,
+                      className: el.className,
+                      id: el.id,
+                      parentHTML: el.parentElement ? el.parentElement.outerHTML : 'no parent'
+                    };
+                  }, button);
+                  
+                  console.log('按鈕詳細資訊：');
+                  console.log(`文字：${buttonInfo.text}`);
+                  console.log(`標籤：${buttonInfo.tagName}`);
+                  console.log(`類別：${buttonInfo.className}`);
+                  console.log(`ID：${buttonInfo.id}`);
+                  console.log(`父元素：${buttonInfo.parentHTML}\n`);
                   
                   // 只處理「確定」按鈕
-                  if (buttonText === '確定') {
+                  if (buttonInfo.text === '確定') {
                     console.log('找到確定按鈕！\n');
                     confirmButton = button;
                     break;
