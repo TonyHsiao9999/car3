@@ -128,6 +128,11 @@ async function handleLoginSuccess(page) {
 // 等待函數
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// 添加延遲函數
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function debugLoginEnvironment(page) {
     console.log('=== 開始環境檢查 ===');
 
@@ -257,56 +262,56 @@ async function debugLoginEnvironment(page) {
 }
 
 async function waitForDialog(page, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      console.log(`嘗試等待對話框 (第 ${i + 1} 次)...`);
-      
-      // 等待頁面加載完成
-      await page.waitForFunction(() => {
-        return document.readyState === 'complete';
-      }, { timeout: 30000 });
-      
-      // 檢查多個可能的選擇器
-      const selectors = [
-        '.dialog-button',
-        '.dialog .button',
-        '.dialog-button.button',
-        'button:contains("我知道了")',
-        '[class*="dialog"] button',
-        '[class*="modal"] button'
-      ];
-      
-      for (const selector of selectors) {
+    for (let i = 0; i < maxRetries; i++) {
         try {
-          console.log(`嘗試選擇器: ${selector}`);
-          const element = await page.waitForSelector(selector, { timeout: 5000 });
-          if (element) {
-            console.log(`找到按鈕: ${selector}`);
-            await element.click();
-            return true;
-          }
-        } catch (e) {
-          console.log(`選擇器 ${selector} 未找到`);
+            log(`嘗試等待對話框 (第 ${i + 1} 次)...`, 'info', true);
+            
+            // 等待頁面加載完成
+            await page.waitForFunction(() => {
+                return document.readyState === 'complete';
+            }, { timeout: 30000 });
+            
+            // 檢查多個可能的選擇器
+            const selectors = [
+                '.dialog-button',
+                '.dialog .button',
+                '.dialog-button.button',
+                'button:contains("我知道了")',
+                '[class*="dialog"] button',
+                '[class*="modal"] button'
+            ];
+            
+            for (const selector of selectors) {
+                try {
+                    log(`嘗試選擇器: ${selector}`, 'info', true);
+                    const element = await page.waitForSelector(selector, { timeout: 5000 });
+                    if (element) {
+                        log(`找到按鈕: ${selector}`, 'info', true);
+                        await element.click();
+                        return true;
+                    }
+                } catch (e) {
+                    log(`選擇器 ${selector} 未找到`, 'info', true);
+                }
+            }
+            
+            // 如果沒有找到按鈕，檢查頁面內容
+            const pageContent = await page.content();
+            log('頁面內容檢查: ' + pageContent.substring(0, 500), 'info', true);
+            
+            // 等待一段時間後重試
+            log('等待 5 秒後重試...', 'info', true);
+            await delay(5000);
+            
+        } catch (error) {
+            log(`第 ${i + 1} 次等待對話框失敗: ${error.message}`, 'error', true);
+            if (i < maxRetries - 1) {
+                log('等待 5 秒後重試...', 'info', true);
+                await delay(5000);
+            }
         }
-      }
-      
-      // 如果沒有找到按鈕，檢查頁面內容
-      const pageContent = await page.content();
-      console.log('頁面內容檢查:', pageContent.substring(0, 500));
-      
-      // 等待一段時間後重試
-      console.log('等待 5 秒後重試...');
-      await page.waitForTimeout(5000);
-      
-    } catch (error) {
-      console.log(`第 ${i + 1} 次等待對話框失敗:`, error.message);
-      if (i < maxRetries - 1) {
-        console.log('等待 5 秒後重試...');
-        await page.waitForTimeout(5000);
-      }
     }
-  }
-  return false;
+    return false;
 }
 
 async function bookCar() {
@@ -447,7 +452,7 @@ async function bookCar() {
         }, { timeout: 30000 });
 
         // 等待可能的初始加載動畫
-        await page.waitForTimeout(5000);
+        await delay(5000);
 
         // 登入前檢查
         log('=== 登入前檢查 ===');
@@ -473,7 +478,7 @@ async function bookCar() {
         await page.type('input#password', PASSWORD);
         
         await page.click('a.button-fill');
-        await wait(5000);  // 增加等待時間到 5 秒
+        await delay(5000);  // 增加等待時間到 5 秒
 
         // 登入後檢查
         log('=== 登入後檢查 ===');
@@ -518,7 +523,7 @@ async function bookCar() {
           if (!found) {
             throw new Error('找不到新增預約按鈕');
           }
-          await wait(5000);  // 增加等待時間到 5 秒
+          await delay(5000);  // 增加等待時間到 5 秒
           await page.screenshot({ path: 'after_click_new_booking.png', fullPage: true });
         } catch (e) {
           log('點擊新增預約按鈕時發生錯誤：', e);
@@ -539,7 +544,7 @@ async function bookCar() {
               break;
             }
           }
-          await wait(5000);  // 等待頁面載入
+          await delay(5000);  // 等待頁面載入
           await page.screenshot({ path: 'after_click_book_car.png', fullPage: true });
         } catch (e) {
           log('點擊預約訂車按鈕時發生錯誤：', e);
@@ -594,7 +599,7 @@ async function bookCar() {
             }
           });
           
-          await wait(1000);
+          await delay(1000);
           
           // 截圖確認選擇結果
           await page.screenshot({ path: 'after_location_select.png', fullPage: true });
@@ -615,7 +620,7 @@ async function bookCar() {
         // 填入上車地點詳細地址
         log('輸入上車地點詳細地址...');
         await page.type('input#pickUp_address_text', '亞東紀念醫院');
-        await wait(2000);
+        await delay(2000);
         
         // 等待 Google Maps 自動完成結果出現
         log('等待 Google Maps 自動完成結果...');
@@ -625,7 +630,7 @@ async function bookCar() {
           
           // 點擊第一個結果
           await page.click('.pac-item:first-child');
-          await wait(2000);
+          await delay(2000);
           await page.screenshot({ path: 'after_select_google_result.png', fullPage: true });
         } catch (e) {
           log('等待 Google Maps 自動完成結果時發生錯誤：', e);
@@ -635,7 +640,7 @@ async function bookCar() {
 
         // 點擊別的地方，確認地址
         await page.click('.location:nth-child(1) > label');
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_confirm_address.png', fullPage: true });
 
         // 選擇下車地點
@@ -648,7 +653,7 @@ async function bookCar() {
             select.dispatchEvent(new Event('input', { bubbles: true }));
           }
         });
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_select_dropoff.png', fullPage: true });
 
         // 選擇下車地址
@@ -665,7 +670,7 @@ async function bookCar() {
             }
           }
         });
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_select_address.png', fullPage: true });
 
         // 選擇預約日期和時間
@@ -695,7 +700,7 @@ async function bookCar() {
           return null;
         });
         log('選擇的預約日期：', selectedDate);
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_select_date.png', fullPage: true });
 
         log('選擇預約時間...');
@@ -737,7 +742,7 @@ async function bookCar() {
         });
 
         log('選擇的預約時間：', selectedTime);
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_select_time.png', fullPage: true });
 
         // 選擇其他選項
@@ -763,7 +768,7 @@ async function bookCar() {
         await page.click('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div');  // 共乘否
         await page.click('.form_item:nth-child(11) .cus_checkbox_type1:nth-child(1) > div');  // 搭輪椅上車是
         await page.click('.form_item:nth-child(12) .cus_checkbox_type1:nth-child(2) > div');  // 大型輪椅否
-        await wait(2000);
+        await delay(2000);
         await page.screenshot({ path: 'after_select_options.png', fullPage: true });
 
         // 在送出按鈕之前收集所有資訊
@@ -852,7 +857,7 @@ async function bookCar() {
         log('送出後當前網址：', currentUrl);
 
         log('已點擊送出預約按鈕');
-        await wait(2000);  // 等待 2 秒
+        await delay(2000);  // 等待 2 秒
 
         // 等待浮動視窗出現，timeout 提升到 60 秒，並每 2 秒 log 一次狀態
         log('等待浮動視窗出現...');
@@ -885,7 +890,7 @@ async function bookCar() {
             });
             log('目前頁面所有 dialog/modal 元素：', allDialogs);
           }
-          await wait(2000);
+          await delay(2000);
         }
         if (!foundDialog) {
           throw new Error('60 秒內未偵測到浮動視窗');
@@ -963,7 +968,7 @@ async function bookCar() {
               log('預約成功資訊：', successInfo);
               
               // 等待頁面更新完成
-              await wait(5000);
+              await delay(5000);
               
               // 截取成功畫面
               await page.screenshot({ 
@@ -1035,7 +1040,7 @@ async function bookCar() {
           }
           
           if (!success) {
-            await wait(2000);
+            await delay(2000);
           }
         }
     } catch (error) {
