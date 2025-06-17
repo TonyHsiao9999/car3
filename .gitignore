@@ -25,4 +25,8 @@ Thumbs.db
 *.swp
 *.swo
 
+# 其他
+*.automa.json
+car-booking-automation/
+
 test.js 

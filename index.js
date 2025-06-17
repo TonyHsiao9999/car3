@@ -99,6 +99,134 @@ async function handleLoginSuccess(page) {
 // 等待函數
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+async function debugLoginEnvironment(page) {
+    console.log('=== 開始環境檢查 ===');
+
+    // 1. 檢查網路環境
+    const networkState = await page.evaluate(() => {
+        return {
+            isHttps: window.location.protocol === 'https:',
+            domain: window.location.hostname,
+            isSecureContext: window.isSecureContext,
+            isInIframe: window.self !== window.top,
+            url: window.location.href
+        };
+    });
+    console.log('網路環境:', JSON.stringify(networkState, null, 2));
+
+    // 2. 檢查瀏覽器設定
+    const browserState = await page.evaluate(() => {
+        return {
+            cookieEnabled: navigator.cookieEnabled,
+            userAgent: navigator.userAgent,
+            isSecureContext: window.isSecureContext,
+            isHttps: window.location.protocol === 'https:',
+            language: navigator.language,
+            platform: navigator.platform
+        };
+    });
+    console.log('瀏覽器狀態:', JSON.stringify(browserState, null, 2));
+
+    // 3. 檢查 cookies 設定
+    const cookieSettings = await page.evaluate(() => {
+        return {
+            documentCookie: document.cookie,
+            cookieEnabled: navigator.cookieEnabled,
+            isSecureContext: window.isSecureContext,
+            isHttps: window.location.protocol === 'https:'
+        };
+    });
+    console.log('Cookie 設定:', JSON.stringify(cookieSettings, null, 2));
+
+    // 4. 檢查網站的 Cookie 政策
+    const cookiePolicy = await page.evaluate(() => {
+        return {
+            hasCookiePolicy: !!document.querySelector('[class*="cookie-policy"], [class*="cookie-notice"]'),
+            hasCookieConsent: !!document.querySelector('[class*="cookie-consent"], [class*="cookie-accept"]'),
+            cookieScripts: Array.from(document.querySelectorAll('script')).filter(script => 
+                script.textContent.includes('cookie') || 
+                script.textContent.includes('Cookie')
+            ).length
+        };
+    });
+    console.log('Cookie 政策:', JSON.stringify(cookiePolicy, null, 2));
+
+    // 5. 檢查登入表單狀態
+    const formState = await page.evaluate(() => {
+        const form = document.querySelector('form');
+        return {
+            exists: !!form,
+            action: form?.action,
+            method: form?.method,
+            inputs: Array.from(document.querySelectorAll('input')).map(input => ({
+                type: input.type,
+                name: input.name,
+                id: input.id,
+                value: input.value,
+                required: input.required
+            }))
+        };
+    });
+    console.log('登入表單狀態:', JSON.stringify(formState, null, 2));
+
+    // 6. 檢查 Local Storage 和 Session Storage
+    const storageState = await page.evaluate(() => {
+        return {
+            localStorage: Object.keys(localStorage).reduce((acc, key) => {
+                acc[key] = localStorage.getItem(key);
+                return acc;
+            }, {}),
+            sessionStorage: Object.keys(sessionStorage).reduce((acc, key) => {
+                acc[key] = sessionStorage.getItem(key);
+                return acc;
+            }, {})
+        };
+    });
+    console.log('儲存狀態:', JSON.stringify(storageState, null, 2));
+
+    // 7. 檢查頁面中的 JavaScript 變數
+    const jsVariables = await page.evaluate(() => {
+        return {
+            windowKeys: Object.keys(window).filter(key => 
+                key.includes('token') || 
+                key.includes('auth') || 
+                key.includes('user') || 
+                key.includes('session')
+            ),
+            hasAuthObject: !!window.auth,
+            hasUserObject: !!window.user,
+            hasSessionObject: !!window.session
+        };
+    });
+    console.log('JavaScript 變數:', JSON.stringify(jsVariables, null, 2));
+
+    // 8. 檢查頁面中的隱藏欄位
+    const hiddenFields = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('input[type="hidden"]')).map(input => ({
+            name: input.name,
+            id: input.id,
+            value: input.value
+        }));
+    });
+    console.log('隱藏欄位:', JSON.stringify(hiddenFields, null, 2));
+
+    // 9. 檢查頁面內容
+    const pageContent = await page.content();
+    console.log('頁面內容 (前500字元):', pageContent.substring(0, 500) + '...');
+
+    // 10. 檢查頁面中的 JavaScript
+    const pageScripts = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('script')).map(script => ({
+            src: script.src,
+            type: script.type,
+            content: script.textContent.substring(0, 100) + '...'
+        }));
+    });
+    console.log('頁面中的 JavaScript:', JSON.stringify(pageScripts, null, 2));
+
+    console.log('=== 環境檢查結束 ===');
+}
+
 async function bookCar() {
     let browser;
     try {
@@ -166,15 +294,36 @@ async function bookCar() {
         // 監聽錯誤
         page.on('error', err => {
             console.error('頁面錯誤：', err);
-            page.screenshot({ path: 'error.png', fullPage: true });
         });
         page.on('pageerror', err => {
             console.error('頁面錯誤：', err);
-            page.screenshot({ path: 'page_error.png', fullPage: true });
         });
         page.on('requestfailed', request => {
             console.error('請求失敗：', request.url(), request.failure().errorText);
-            page.screenshot({ path: 'request_failed.png', fullPage: true });
+        });
+
+        // 啟用請求攔截
+        await page.setRequestInterception(true);
+        page.on('request', request => {
+            if (request.url().includes('login') || request.url().includes('auth')) {
+                console.log('登入請求:', {
+                    url: request.url(),
+                    method: request.method(),
+                    headers: request.headers(),
+                    postData: request.postData()
+                });
+            }
+            request.continue();
+        });
+
+        page.on('response', response => {
+            if (response.url().includes('login') || response.url().includes('auth')) {
+                console.log('登入回應:', {
+                    url: response.url(),
+                    status: response.status(),
+                    headers: response.headers()
+                });
+            }
         });
 
         console.log('前往目標網頁...');
@@ -182,14 +331,16 @@ async function bookCar() {
             waitUntil: 'networkidle0',
             timeout: 30000
         });
-        await page.screenshot({ path: 'after_load.png', fullPage: true });
+
+        // 登入前檢查
+        console.log('=== 登入前檢查 ===');
+        await debugLoginEnvironment(page);
 
         // 等待並點擊「我知道了」按鈕
         console.log('等待並點擊「我知道了」按鈕...');
         try {
             await page.waitForSelector('.dialog-button', { timeout: 5000 });
             await page.click('.dialog-button');
-            await page.screenshot({ path: 'after_dialog.png', fullPage: true });
         } catch (error) {
             console.log('找不到「我知道了」按鈕，繼續執行...');
         }
@@ -198,11 +349,13 @@ async function bookCar() {
         console.log('開始登入流程...');
         await page.type('input#IDNumber', ID_NUMBER);
         await page.type('input#password', PASSWORD);
-        await page.screenshot({ path: 'after_input_login.png', fullPage: true });
         
         await page.click('a.button-fill');
         await wait(5000);  // 增加等待時間到 5 秒
-        await page.screenshot({ path: 'after_click_login.png', fullPage: true });
+
+        // 登入後檢查
+        console.log('=== 登入後檢查 ===');
+        await debugLoginEnvironment(page);
 
         // 等待登入成功對話框
         await page.waitForSelector('.dialog-button', { timeout: 10000 });

@@ -1,11 +1,11 @@
 {
-  "name": "car3",
+  "name": "car-booking-automation",
   "version": "1.0.0",
   "description": "長照訂車自動化程式",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "debug": "node debug.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
