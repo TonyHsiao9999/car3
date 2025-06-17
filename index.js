@@ -2,6 +2,8 @@ const puppeteer = require('puppeteer');
 const cron = require('node-cron');
 require('dotenv').config();
 const { waitForFunction } = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 
 // 檢查必要的環境變數
 if (!process.env.CAR_BOOKING_ID || !process.env.CAR_BOOKING_PASSWORD) {
@@ -16,6 +18,33 @@ const PASSWORD = String(process.env.CAR_BOOKING_PASSWORD);
 // 設定重試次數和延遲
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000;
+
+// 創建日誌目錄
+const logDir = '/tmp/logs';
+if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+}
+
+// 創建日誌檔案
+const logFile = path.join(logDir, `booking-${new Date().toISOString().replace(/[:.]/g, '-')}.log`);
+
+// 自定義日誌函數
+function log(message, type = 'info', force = false) {
+    // 如果不是強制輸出，且不是錯誤，則跳過
+    if (!force && type !== 'error') {
+        return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+    console.log(logMessage);
+}
+
+// 錯誤處理函數
+function handleError(error, context = '') {
+    const errorMessage = `錯誤發生在 ${context}: ${error.message}`;
+    log(errorMessage, 'error', true);
+}
 
 // 設定排程任務
 console.log('設定排程任務...');
@@ -281,14 +310,14 @@ async function waitForDialog(page, maxRetries = 3) {
 }
 
 async function bookCar() {
-    console.log('=== 開始執行預約任務 ===');
-    console.log('環境變數檢查:');
-    console.log('- ID_NUMBER:', process.env.ID_NUMBER ? '已設置' : '未設置');
-    console.log('- CAR_BOOKING_PASSWORD:', process.env.CAR_BOOKING_PASSWORD ? '已設置' : '未設置');
-    console.log('- PICKUP_LOCATION:', process.env.PICKUP_LOCATION ? '已設置' : '未設置');
-    console.log('- DROP_OFF_ADDRESS:', process.env.DROP_OFF_ADDRESS ? '已設置' : '未設置');
+    log('=== 開始執行預約任務 ===', 'info', true);
+    log('環境變數檢查:');
+    log(`- ID_NUMBER: ${process.env.ID_NUMBER ? '已設置' : '未設置'}`);
+    log(`- CAR_BOOKING_PASSWORD: ${process.env.CAR_BOOKING_PASSWORD ? '已設置' : '未設置'}`);
+    log(`- PICKUP_LOCATION: ${process.env.PICKUP_LOCATION ? '已設置' : '未設置'}`);
+    log(`- DROP_OFF_ADDRESS: ${process.env.DROP_OFF_ADDRESS ? '已設置' : '未設置'}`);
     
-    console.log('\n啟動瀏覽器...');
+    log('啟動瀏覽器...', 'info', true);
     const browser = await puppeteer.launch({
         headless: 'new',
         args: [
@@ -309,10 +338,10 @@ async function bookCar() {
         },
         timeout: 120000
     });
-    console.log('瀏覽器啟動成功');
+    log('瀏覽器啟動成功', 'info', true);
 
     try {
-        console.log('\n開啟新頁面...');
+        log('開啟新頁面...');
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setDefaultNavigationTimeout(120000);
@@ -378,42 +407,35 @@ async function bookCar() {
 
         // 監聽錯誤
         page.on('error', err => {
-            console.error('頁面錯誤：', err);
+            log(`頁面錯誤: ${err.message}`, 'error', true);
         });
         page.on('pageerror', err => {
-            console.error('頁面錯誤：', err);
+            log(`頁面 JavaScript 錯誤: ${err.message}`, 'error', true);
         });
         page.on('requestfailed', request => {
-            console.error('請求失敗：', request.url(), request.failure().errorText);
+            log(`請求失敗: ${request.url()} ${request.failure().errorText}`, 'error', true);
         });
 
         // 啟用請求攔截
         await page.setRequestInterception(true);
         page.on('request', request => {
-            console.log(`請求: ${request.method()} ${request.url()}`);
+            // 只記錄登入相關的請求
             if (request.url().includes('login') || request.url().includes('auth')) {
-                console.log('登入請求:', {
-                    url: request.url(),
-                    method: request.method(),
-                    headers: request.headers(),
-                    postData: request.postData()
-                });
+                log(`登入請求: ${request.method()} ${request.url()}`, 'info', true);
             }
             request.continue();
         });
 
         page.on('response', response => {
-            console.log(`回應: ${response.status()} ${response.url()}`);
-            if (response.url().includes('login') || response.url().includes('auth')) {
-                console.log('登入回應:', {
-                    url: response.url(),
-                    status: response.status(),
-                    headers: response.headers()
-                });
+            // 只記錄錯誤回應和登入相關的回應
+            if (response.status() >= 400 || 
+                response.url().includes('login') || 
+                response.url().includes('auth')) {
+                log(`回應: ${response.status()} ${response.url()}`, 'info', true);
             }
         });
 
-        console.log('前往目標網頁...');
+        log('前往目標網頁...');
         await page.goto('https://www.ntpc.ltc-car.org/', {
             waitUntil: ['networkidle0', 'domcontentloaded'],
             timeout: 60000
@@ -428,25 +450,25 @@ async function bookCar() {
         await page.waitForTimeout(5000);
 
         // 登入前檢查
-        console.log('=== 登入前檢查 ===');
+        log('=== 登入前檢查 ===');
         await debugLoginEnvironment(page);
 
         // 等待並點擊「我知道了」按鈕
-        console.log('等待並點擊「我知道了」按鈕...');
+        log('等待並點擊「我知道了」按鈕...');
         try {
           const dialogFound = await waitForDialog(page);
           if (!dialogFound) {
-            console.log('未找到對話框，嘗試繼續執行...');
+            log('未找到對話框，嘗試繼續執行...');
             // 嘗試直接點擊頁面中心
             await page.mouse.click(page.viewport().width / 2, page.viewport().height / 2);
           }
         } catch (error) {
-          console.log('處理對話框時發生錯誤:', error.message);
-          console.log('繼續執行...');
+          log('處理對話框時發生錯誤:', error.message);
+          log('繼續執行...');
         }
 
         // 登入流程
-        console.log('開始登入流程...');
+        log('開始登入流程...');
         await page.type('input#IDNumber', ID_NUMBER);
         await page.type('input#password', PASSWORD);
         
@@ -454,7 +476,7 @@ async function bookCar() {
         await wait(5000);  // 增加等待時間到 5 秒
 
         // 登入後檢查
-        console.log('=== 登入後檢查 ===');
+        log('=== 登入後檢查 ===');
         await debugLoginEnvironment(page);
 
         // 等待登入成功對話框
@@ -464,31 +486,31 @@ async function bookCar() {
 
         // 登入後立即截圖並轉為 Base64
         const loginScreenshot = await page.screenshot({ encoding: 'base64', fullPage: true });
-        console.error('登入後畫面截圖（Base64）：');
-        console.error(loginScreenshot);
-        console.error('登入後 cookies：', await page.cookies());
+        log('登入後畫面截圖（Base64）：');
+        log(loginScreenshot);
+        log('登入後 cookies：', await page.cookies());
 
         // 記錄當前 URL 和頁面標題
         const loginPageUrl = await page.url();
         const loginPageTitle = await page.title();
-        console.error('登入後頁面資訊：', {
+        log('登入後頁面資訊：', {
           url: loginPageUrl,
           title: loginPageTitle,
           html: await page.content()
         });
 
         // 點擊新增預約
-        console.log('點擊新增預約按鈕...');
+        log('點擊新增預約按鈕...');
         try {
           await page.waitForSelector('a.link', { timeout: 10000 });
           const links = await page.$$('a.link');
           let found = false;
           for (const link of links) {
             const text = await page.evaluate(el => el.textContent.trim(), link);
-            console.log('找到連結：', text);
+            log('找到連結：', text);
             if (text === '新增預約') {
               await link.click();
-              console.log('已點擊新增預約按鈕');
+              log('已點擊新增預約按鈕');
               found = true;
               break;
             }
@@ -499,13 +521,13 @@ async function bookCar() {
           await wait(5000);  // 增加等待時間到 5 秒
           await page.screenshot({ path: 'after_click_new_booking.png', fullPage: true });
         } catch (e) {
-          console.error('點擊新增預約按鈕時發生錯誤：', e);
+          log('點擊新增預約按鈕時發生錯誤：', e);
           await page.screenshot({ path: 'error_click_new_booking.png', fullPage: true });
           throw e;
         }
 
         // 點擊「預約訂車」按鈕
-        console.log('點擊預約訂車按鈕...');
+        log('點擊預約訂車按鈕...');
         try {
           await page.waitForSelector('button.button-fill', { timeout: 10000 });
           const buttons = await page.$$('button.button-fill');
@@ -513,20 +535,20 @@ async function bookCar() {
             const text = await page.evaluate(el => el.textContent.trim(), button);
             if (text === '預約訂車') {
               await button.click();
-              console.log('已點擊預約訂車按鈕');
+              log('已點擊預約訂車按鈕');
               break;
             }
           }
           await wait(5000);  // 等待頁面載入
           await page.screenshot({ path: 'after_click_book_car.png', fullPage: true });
         } catch (e) {
-          console.error('點擊預約訂車按鈕時發生錯誤：', e);
+          log('點擊預約訂車按鈕時發生錯誤：', e);
           await page.screenshot({ path: 'error_click_book_car.png', fullPage: true });
           throw e;
         }
 
         // 等待頁面完全載入
-        console.log('等待頁面完全載入...');
+        log('等待頁面完全載入...');
         await page.waitForFunction(
           () => {
             // 檢查頁面是否還在載入中
@@ -550,16 +572,16 @@ async function bookCar() {
           await page.waitForSelector('select#pickUp_location', { timeout: 30000 });  // 增加等待時間到 30 秒
           await page.screenshot({ path: 'before_select_location.png', fullPage: true });
         } catch (e) {
-          console.error('等待上車地點下拉選單超時，錯誤：', e);
+          log('等待上車地點下拉選單超時，錯誤：', e);
           // 儲存當前 HTML 內容以便調試
           const html = await page.content();
-          console.log('頁面 HTML：', html);
+          log('頁面 HTML：', html);
           await page.screenshot({ path: 'error_wait_location.png', fullPage: true });
           throw e;
         }
 
         // 選擇上車地點（醫療院所）
-        console.log('嘗試選擇上車地點...');
+        log('嘗試選擇上車地點...');
         try {
           // 直接設定選項值
           await page.evaluate(() => {
@@ -582,21 +604,21 @@ async function bookCar() {
             const select = document.querySelector('select#pickUp_location');
             return select ? select.value : null;
           });
-          console.log('選擇的上車地點值:', selectedValue);
+          log('選擇的上車地點值:', selectedValue);
           
         } catch (e) {
-          console.error('選擇上車地點時發生錯誤：', e);
+          log('選擇上車地點時發生錯誤：', e);
           await page.screenshot({ path: 'error_location_select.png', fullPage: true });
           throw e;
         }
 
         // 填入上車地點詳細地址
-        console.log('輸入上車地點詳細地址...');
+        log('輸入上車地點詳細地址...');
         await page.type('input#pickUp_address_text', '亞東紀念醫院');
         await wait(2000);
         
         // 等待 Google Maps 自動完成結果出現
-        console.log('等待 Google Maps 自動完成結果...');
+        log('等待 Google Maps 自動完成結果...');
         try {
           await page.waitForSelector('.pac-item', { timeout: 15000 });
           await page.screenshot({ path: 'before_select_google_result.png', fullPage: true });
@@ -606,7 +628,7 @@ async function bookCar() {
           await wait(2000);
           await page.screenshot({ path: 'after_select_google_result.png', fullPage: true });
         } catch (e) {
-          console.error('等待 Google Maps 自動完成結果時發生錯誤：', e);
+          log('等待 Google Maps 自動完成結果時發生錯誤：', e);
           await page.screenshot({ path: 'error_google_result.png', fullPage: true });
           throw e;
         }
@@ -617,7 +639,7 @@ async function bookCar() {
         await page.screenshot({ path: 'after_confirm_address.png', fullPage: true });
 
         // 選擇下車地點
-        console.log('選擇下車地點...');
+        log('選擇下車地點...');
         await page.evaluate(() => {
           const select = document.querySelector('select#getOff_location');
           if (select) {
@@ -630,7 +652,7 @@ async function bookCar() {
         await page.screenshot({ path: 'after_select_dropoff.png', fullPage: true });
 
         // 選擇下車地址
-        console.log('選擇下車地址...');
+        log('選擇下車地址...');
         await page.evaluate(() => {
           const select = document.querySelector('select#getOff_address');
           if (select) {
@@ -647,7 +669,7 @@ async function bookCar() {
         await page.screenshot({ path: 'after_select_address.png', fullPage: true });
 
         // 選擇預約日期和時間
-        console.log('選擇預約日期...');
+        log('選擇預約日期...');
         const selectedDate = await page.evaluate(() => {
           const select = document.querySelector('select#appointment_date');
           if (select) {
@@ -655,7 +677,7 @@ async function bookCar() {
             const lastOption = options[options.length - 1];
             
             // 記錄所有日期選項的詳細資訊
-            console.log('所有日期選項：', options.map(opt => ({
+            log('所有日期選項：', options.map(opt => ({
               value: opt.value,
               text: opt.text,
               disabled: opt.disabled,
@@ -672,11 +694,11 @@ async function bookCar() {
           }
           return null;
         });
-        console.log('選擇的預約日期：', selectedDate);
+        log('選擇的預約日期：', selectedDate);
         await wait(2000);
         await page.screenshot({ path: 'after_select_date.png', fullPage: true });
 
-        console.log('選擇預約時間...');
+        log('選擇預約時間...');
         const selectedTime = await page.evaluate(() => {
           const hourSelect = document.querySelector('select#appointment_hour');
           const minuteSelect = document.querySelector('select#appointment_minutes');
@@ -684,7 +706,7 @@ async function bookCar() {
 
           if (hourSelect) {
             // 記錄所有小時選項的詳細資訊
-            console.log('所有小時選項：', Array.from(hourSelect.options).map(opt => ({
+            log('所有小時選項：', Array.from(hourSelect.options).map(opt => ({
               value: opt.value,
               text: opt.text,
               disabled: opt.disabled,
@@ -699,7 +721,7 @@ async function bookCar() {
 
           if (minuteSelect) {
             // 記錄所有分鐘選項的詳細資訊
-            console.log('所有分鐘選項：', Array.from(minuteSelect.options).map(opt => ({
+            log('所有分鐘選項：', Array.from(minuteSelect.options).map(opt => ({
               value: opt.value,
               text: opt.text,
               disabled: opt.disabled,
@@ -714,16 +736,16 @@ async function bookCar() {
           return { hour, minute };
         });
 
-        console.log('選擇的預約時間：', selectedTime);
+        log('選擇的預約時間：', selectedTime);
         await wait(2000);
         await page.screenshot({ path: 'after_select_time.png', fullPage: true });
 
         // 選擇其他選項
-        console.log('選擇其他選項...');
+        log('選擇其他選項...');
         await page.evaluate(() => {
           // 記錄所有選項的狀態
           const allSelects = document.querySelectorAll('select');
-          console.log('所有下拉選單狀態：', Array.from(allSelects).map(select => ({
+          log('所有下拉選單狀態：', Array.from(allSelects).map(select => ({
             id: select.id,
             value: select.value,
             options: Array.from(select.options).map(opt => ({
@@ -745,7 +767,7 @@ async function bookCar() {
         await page.screenshot({ path: 'after_select_options.png', fullPage: true });
 
         // 在送出按鈕之前收集所有資訊
-        console.error('=== 系統資訊 ===');
+        log('=== 系統資訊 ===');
         const debugInfo = await page.evaluate(async () => {
           const data = {
             userAgent: navigator.userAgent,
@@ -779,11 +801,11 @@ async function bookCar() {
         const cookies = await page.cookies();
         debugInfo.cookies = cookies;
 
-        console.error('系統偵錯資訊：', JSON.stringify(debugInfo, null, 2));
-        console.error('=== 系統資訊結束 ===');
+        log('系統偵錯資訊：', JSON.stringify(debugInfo, null, 2));
+        log('=== 系統資訊結束 ===');
 
         // 改進按鈕選擇邏輯，使用更輕量的方式
-        console.error('等待送出按鈕出現...');
+        log('等待送出按鈕出現...');
         const buttonInfo = await page.evaluate(() => {
           const findButton = () => {
             const buttons = document.querySelectorAll('button');
@@ -804,7 +826,7 @@ async function bookCar() {
           };
 
           const result = findButton();
-          console.error('按鈕狀態：', result);
+          log('按鈕狀態：', result);
           return result;
         });
 
@@ -827,13 +849,13 @@ async function bookCar() {
 
         // 送出後 log 當前網址
         const currentUrl = await page.url();
-        console.error('送出後當前網址：', currentUrl);
+        log('送出後當前網址：', currentUrl);
 
-        console.log('已點擊送出預約按鈕');
+        log('已點擊送出預約按鈕');
         await wait(2000);  // 等待 2 秒
 
         // 等待浮動視窗出現，timeout 提升到 60 秒，並每 2 秒 log 一次狀態
-        console.log('等待浮動視窗出現...');
+        log('等待浮動視窗出現...');
         let foundDialog = null;
         const start = Date.now();
         while (Date.now() - start < 60000) { // 最多等 60 秒
@@ -852,7 +874,7 @@ async function bookCar() {
             return null;
           });
           if (foundDialog) {
-            console.error('偵測到浮動視窗：', foundDialog);
+            log('偵測到浮動視窗：', foundDialog);
             break;
           } else {
             const allDialogs = await page.evaluate(() => {
@@ -861,7 +883,7 @@ async function bookCar() {
                 textContent: d.textContent
               }));
             });
-            console.error('目前頁面所有 dialog/modal 元素：', allDialogs);
+            log('目前頁面所有 dialog/modal 元素：', allDialogs);
           }
           await wait(2000);
         }
@@ -870,14 +892,14 @@ async function bookCar() {
         }
 
         // 檢查預約結果
-        console.log('檢查預約結果...');
+        log('檢查預約結果...');
         const bookingInfo = {
           '日期': selectedDate.text,
           '時間': `${selectedTime.hour}:${selectedTime.minute}`,
           '執行環境': process.env.NODE_ENV || 'development',
           '時間戳記': new Date().toISOString()
         };
-        console.log('預約資訊：', bookingInfo);
+        log('預約資訊：', bookingInfo);
 
         // 等待並檢查浮動視窗內容
         let success = false;
@@ -886,7 +908,7 @@ async function bookCar() {
 
         while (!success && attempts < maxAttempts) {
           attempts++;
-          console.log(`第 ${attempts} 次檢查...`);
+          log(`第 ${attempts} 次檢查...`);
           
           const dialogResult = await page.evaluate(() => {
             // 檢查所有可能的浮動視窗選擇器
@@ -921,13 +943,13 @@ async function bookCar() {
           });
 
           if (dialogResult) {
-            console.log('浮動視窗內容：', dialogResult);
+            log('浮動視窗內容：', dialogResult);
             
             // 檢查成功訊息（考慮不同環境的文字格式）
             if (dialogResult.message.includes('已完成預約') || 
                 dialogResult.message.includes('預約成功') ||
                 dialogResult.message.includes('預約完成')) {
-              console.log(`在 ${dialogResult.selector} 中找到成功訊息`);
+              log(`在 ${dialogResult.selector} 中找到成功訊息`);
               success = true;
               
               // 記錄成功資訊
@@ -938,7 +960,7 @@ async function bookCar() {
                 '執行環境': process.env.NODE_ENV || 'development',
                 '時間戳記': new Date().toISOString()
               };
-              console.log('預約成功資訊：', successInfo);
+              log('預約成功資訊：', successInfo);
               
               // 等待頁面更新完成
               await wait(5000);
@@ -972,7 +994,7 @@ async function bookCar() {
             // 檢查錯誤訊息（考慮不同環境的文字格式）
             else if (dialogResult.message.includes('此時段無法預約') || 
                      dialogResult.message.includes('無法預約')) {
-              console.log(`在 ${dialogResult.selector} 中找到錯誤訊息`);
+              log(`在 ${dialogResult.selector} 中找到錯誤訊息`);
               
               // 記錄失敗資訊
               const errorInfo = {
@@ -982,7 +1004,7 @@ async function bookCar() {
                 '執行環境': process.env.NODE_ENV || 'development',
                 '時間戳記': new Date().toISOString()
               };
-              console.log('預約失敗資訊：', errorInfo);
+              log('預約失敗資訊：', errorInfo);
               
               // 截取失敗畫面
               await page.screenshot({ 
@@ -1017,11 +1039,11 @@ async function bookCar() {
           }
         }
     } catch (error) {
-        console.error('執行過程中發生錯誤:', error);
+        handleError(error, 'bookCar');
         throw error;
     } finally {
-        console.log('\n關閉瀏覽器...');
+        log('關閉瀏覽器...', 'info', true);
         await browser.close();
-        console.log('瀏覽器已關閉');
+        log('瀏覽器已關閉');
     }
 } 
