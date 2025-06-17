@@ -452,33 +452,20 @@ async function bookCar() {
 
         console.log('預約成功！');
 
-        // 列印所有包含「登入成功」的元素資訊
-        const successElements = await page.$$eval('*', elements =>
-          elements
-            .filter(el => el.textContent && el.textContent.includes('登入成功'))
-            .map(el => ({
-              tag: el.tagName,
-              class: el.className,
-              id: el.id,
-              text: el.textContent,
-              outerHTML: el.outerHTML
-            }))
-        );
-        console.log('所有包含「登入成功」的元素：', successElements);
+        // 等待「確定」按鈕出現（最長 15 秒）
+        await page.waitForFunction(() => {
+          return Array.from(document.querySelectorAll('span.dialog-button')).some(btn => btn.textContent.trim() === '確定');
+        }, { timeout: 15000 });
 
-        // 等待所有 dialog-button 出現
-        await page.waitForSelector('span.dialog-button', { timeout: 10000 });
-
-        // 列出所有 dialog-button 的文字
+        // 列印所有 dialog-button 文字
         const dialogButtons = await page.$$eval('span.dialog-button', btns =>
           btns.map(btn => btn.textContent.trim())
         );
         console.log('所有 dialog-button 文字：', dialogButtons);
 
-        // 嘗試點擊「確定」按鈕
-        const dialogButtonHandles = await page.$$('span.dialog-button');
+        // 點擊「確定」按鈕
         let clicked = false;
-        for (const btn of dialogButtonHandles) {
+        for (const btn of await page.$$('span.dialog-button')) {
           const text = await (await btn.getProperty('textContent')).jsonValue();
           if (text.trim() === '確定') {
             await btn.click();
