@@ -381,8 +381,35 @@ async function bookCar() {
         console.log('檢查預約結果...');
         try {
           console.log('等待對話框出現...');
-          await page.waitForSelector('.el-dialog__body', { timeout: 30000 });
+          
+          // 先等待頁面載入完成
+          await page.waitForFunction(
+            () => {
+              const loadingIndicator = document.querySelector('.loading');
+              return !loadingIndicator;
+            },
+            { timeout: 30000 }
+          );
+
+          // 使用更穩健的方式等待對話框
+          await page.waitForFunction(
+            () => {
+              const dialog = document.querySelector('.el-dialog__body');
+              return dialog && dialog.offsetParent !== null;
+            },
+            { timeout: 30000 }
+          );
+
           console.log('對話框已出現，檢查內容...');
+          
+          // 等待對話框內容載入
+          await page.waitForFunction(
+            () => {
+              const dialog = document.querySelector('.el-dialog__body');
+              return dialog && dialog.textContent.trim().length > 0;
+            },
+            { timeout: 30000 }
+          );
           
           const dialogContent = await page.evaluate(() => {
             const dialog = document.querySelector('.el-dialog__body');
