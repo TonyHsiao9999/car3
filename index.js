@@ -259,8 +259,9 @@ async function bookCar() {
           try {
             // 嘗試不同的選擇器
             const selectors = [
-              '.modal-dialog a.button-fill.button-large.color_deep_main',
-              '.popup a.button-fill.button-large.color_deep_main',
+              'span.dialog-button',
+              '.modal-dialog span.dialog-button',
+              '.popup span.dialog-button',
               'a.button-fill.button-large.color_deep_main'
             ];
 
