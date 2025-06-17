@@ -249,142 +249,80 @@ async function bookCar() {
           throw new Error(`登入失敗：${errorMessage}`);
         }
 
-        // 等待確認按鈕出現
-        console.log('等待確認按鈕出現...\n');
+        // 等待浮動視窗出現
+        console.log('等待浮動視窗出現...\n');
         try {
-          const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
+          // 等待浮動視窗出現
+          await page.waitForSelector('.popup', { timeout: 10000 });
+          console.log('浮動視窗已出現！\n');
+
+          // 等待確定按鈕出現
+          console.log('等待確定按鈕出現...\n');
+          const confirmButton = await page.waitForSelector('.popup a.button-fill.button-large.color_deep_main', { timeout: 10000 });
+          
           if (confirmButton) {
-            console.log('找到確認按鈕，準備點擊...\n');
-            await confirmButton.click();
-            console.log('已點擊確認按鈕！\n');
+            console.log('找到確定按鈕，準備點擊...\n');
+            
+            // 確保按鈕可見和可點擊
+            const isConfirmVisible = await confirmButton.isVisible();
+            const isConfirmEnabled = await page.evaluate(button => {
+              return !button.disabled && !button.classList.contains('disabled');
+            }, confirmButton);
+
+            console.log(`確定按鈕狀態：可見=${isConfirmVisible}, 可點擊=${isConfirmEnabled}\n`);
+
+            if (!isConfirmVisible || !isConfirmEnabled) {
+              throw new Error('確定按鈕不可見或不可點擊');
+            }
+
+            // 使用 JavaScript 點擊確定按鈕
+            await page.evaluate(button => {
+              button.click();
+            }, confirmButton);
+            
+            console.log('已點擊確定按鈕！\n');
             await page.waitForTimeout(5000);
+
+            // 檢查是否成功進入預約頁面
+            const isBookingPage = await page.evaluate(() => {
+              return window.location.href.includes('/ntpc/booking');
+            });
+
+            if (!isBookingPage) {
+              console.log('尚未進入預約頁面，等待頁面載入...\n');
+              await page.waitForTimeout(5000);
+              
+              // 再次檢查
+              const isBookingPageRetry = await page.evaluate(() => {
+                return window.location.href.includes('/ntpc/booking');
+              });
+
+              if (!isBookingPageRetry) {
+                throw new Error('無法進入預約頁面');
+              }
+            }
+
+            console.log('成功進入預約頁面！\n');
           }
         } catch (error) {
-          console.log('確認按鈕未出現，可能登入失敗或頁面結構改變\n');
+          console.log('處理浮動視窗時發生錯誤：', error.message, '\n');
           throw error;
         }
 
-        // 等待頁面導航
-        console.log('等待頁面導航完成...\n');
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-            console.log('等待頁面導航超時，繼續執行...\n');
-        });
-
-        // 等待一段時間讓頁面完全載入
+        // 等待頁面載入完成
+        console.log('等待頁面載入完成...\n');
         await page.waitForTimeout(5000);
 
         // 檢查是否在預約頁面
-        let isBookingPage = false;
-        let retryCount = 0;
-        const maxRetries = 3;
-
-        while (!isBookingPage && retryCount < maxRetries) {
-            try {
-                // 檢查多個可能的選擇器
-                const selectors = [
-                    '#pickUp_location',
-                    'select[name="pickUp_location"]',
-                    'input[name="pickUp_location"]',
-                    'form[name="bookingForm"]',
-                    '.booking-form'
-                ];
-
-                for (const selector of selectors) {
-                    const element = await page.$(selector);
-                    if (element) {
-                        isBookingPage = true;
-                        console.log(`找到預約頁面元素：${selector}\n`);
-                        break;
-                    }
-                }
-
-                if (!isBookingPage) {
-                    console.log(`第 ${retryCount + 1} 次檢查：不在預約頁面，等待確定按鈕...\n`);
-                    
-                    // 等待並點擊浮動視窗中的確定按鈕
-                    try {
-                        // 先檢查浮動視窗是否存在
-                        const modalDialog = await page.waitForSelector('.modal-dialog', { timeout: 5000 }).catch(() => null);
-                        if (modalDialog) {
-                            console.log('找到浮動視窗，等待確定按鈕...\n');
-                            
-                            // 在浮動視窗中尋找確定按鈕
-                            const confirmButton = await page.waitForSelector('.modal-dialog a.button-fill.button-large.color_deep_main', { timeout: 5000 });
-                            if (confirmButton) {
-                                const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
-                                if (buttonText === '確定') {
-                                    await confirmButton.click();
-                                    console.log('已點擊浮動視窗中的確定按鈕！\n');
-                                    
-                                    // 等待頁面導航
-                                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-                                        console.log('等待頁面導航超時，繼續執行...\n');
-                                    });
-                                    
-                                    // 等待頁面載入
-                                    await page.waitForTimeout(5000);
-                                } else {
-                                    console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
-                                }
-                            } else {
-                                console.log('在浮動視窗中找不到確定按鈕\n');
-                            }
-                        } else {
-                            console.log('找不到浮動視窗，嘗試尋找其他確定按鈕...\n');
-                            
-                            // 嘗試尋找其他可能的確定按鈕
-                            const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 5000 });
-                            if (confirmButton) {
-                                const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
-                                if (buttonText === '確定') {
-                                    await confirmButton.click();
-                                    console.log('已點擊確定按鈕！\n');
-                                    
-                                    // 等待頁面導航
-                                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-                                        console.log('等待頁面導航超時，繼續執行...\n');
-                                    });
-                                    
-                                    // 等待頁面載入
-                                    await page.waitForTimeout(5000);
-                                } else {
-                                    console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.log('找不到確定按鈕，繼續執行...\n');
-                    }
-                }
-            } catch (error) {
-                console.log(`第 ${retryCount + 1} 次檢查發生錯誤：${error.message}\n`);
-            }
-
-            retryCount++;
-            if (!isBookingPage && retryCount < maxRetries) {
-                console.log(`等待 5 秒後進行第 ${retryCount + 1} 次檢查...\n`);
-                await page.waitForTimeout(5000);
-            }
-        }
+        const isBookingPage = await page.evaluate(() => {
+          return window.location.href.includes('/ntpc/booking');
+        });
 
         if (!isBookingPage) {
-            // 如果仍然不在預約頁面，嘗試重新整理
-            console.log('嘗試重新整理頁面...\n');
-            await page.reload({ waitUntil: 'networkidle0' });
-            await page.waitForTimeout(5000);
-
-            // 再次檢查是否在預約頁面
-            try {
-                await page.waitForSelector('#pickUp_location', { timeout: 10000 });
-                isBookingPage = true;
-                console.log('重新整理後成功進入預約頁面！\n');
-            } catch (error) {
-                console.log('重新整理後仍無法進入預約頁面，請檢查登入狀態。\n');
-                throw new Error('無法進入預約頁面');
-            }
-        } else {
-            console.log('成功進入預約頁面！\n');
+          throw new Error('無法進入預約頁面');
         }
+
+        console.log('成功進入預約頁面！\n');
 
         // 選擇上車地點
         console.log('選擇上車地點...');
