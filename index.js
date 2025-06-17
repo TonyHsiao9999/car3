@@ -209,6 +209,10 @@ async function bookCar() {
         await page.click('.dialog-button');
         await page.screenshot({ path: 'after_login_success.png', fullPage: true });
 
+        // 登入流程結束後立即 log cookies
+        const cookiesAfterLogin = await page.cookies();
+        console.error('登入後 cookies：', cookiesAfterLogin);
+
         // 點擊新增預約
         console.log('點擊新增預約按鈕...');
         try {
