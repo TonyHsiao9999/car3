@@ -209,50 +209,53 @@ async function bookCar() {
             // 等待登入成功訊息
             console.log('等待登入成功訊息...');
             try {
-                // 等待可能出現的登入成功訊息
+                // 等待「確定」按鈕出現
                 await page.waitForFunction(
                     () => {
-                        // 檢查是否有成功訊息
-                        const successDialog = document.querySelector('.dialog-text');
-                        if (successDialog && successDialog.textContent.includes('登入成功')) {
-                            return true;
-                        }
-                        
-                        // 檢查是否已經進入預約頁面（沒有登入表單）
-                        const loginForm = document.querySelector('input[type="text"], input[type="password"]');
-                        if (!loginForm) {
-                            return true;
-                        }
-                        
-                        return false;
+                        const button = document.querySelector('.dialog-button');
+                        return button && button.textContent.trim() === '確定';
                     },
                     { timeout: 15000 }
                 );
                 
-                // 如果有成功訊息，點擊確定按鈕
-                const confirmButton = await page.evaluate(() => {
+                // 點擊「確定」按鈕
+                console.log('點擊確定按鈕...');
+                await page.evaluate(() => {
                     const button = document.querySelector('.dialog-button');
-                    if (button) {
+                    if (button && button.textContent.trim() === '確定') {
                         button.click();
-                        return true;
                     }
-                    return false;
                 });
                 
-                if (confirmButton) {
-                    console.log('點擊確定按鈕...');
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                }
+                // 等待按鈕點擊後的效果
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // 等待「新增預約」按鈕出現
+                console.log('等待新增預約按鈕...');
+                await page.waitForFunction(
+                    () => {
+                        const buttons = Array.from(document.querySelectorAll('button, a, .button-fill'));
+                        return buttons.some(btn => 
+                            btn.textContent.trim() === '新增預約' || 
+                            btn.getAttribute('aria-label') === '新增預約'
+                        );
+                    },
+                    { timeout: 15000 }
+                );
+                
+                console.log('登入成功！');
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
                 // 截圖並印出當前頁面狀態
                 await page.screenshot({ path: 'login_failed.png', fullPage: true });
                 const pageState = await page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button, a, .button-fill'));
                     return {
                         hasLoginForm: !!document.querySelector('input[type="text"], input[type="password"]'),
                         dialogText: Array.from(document.querySelectorAll('.dialog-text')).map(el => el.textContent.trim()),
-                        visibleButtons: Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill')).map(btn => ({
+                        visibleButtons: buttons.map(btn => ({
                             text: btn.textContent.trim(),
+                            ariaLabel: btn.getAttribute('aria-label'),
                             html: btn.outerHTML
                         }))
                     };
