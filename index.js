@@ -368,6 +368,23 @@ async function bookCar() {
                         // 等待一段時間讓頁面完全載入
                         await page.waitForTimeout(5000);
                         
+                        // 等待並輸入帳號密碼
+                        console.log('等待帳號密碼輸入框出現...');
+                        await page.waitForSelector('input[name="account"]', {
+                            visible: true,
+                            timeout: 5000
+                        }).catch(() => console.log('等待帳號輸入框超時'));
+                        
+                        await page.waitForSelector('input[name="password"]', {
+                            visible: true,
+                            timeout: 5000
+                        }).catch(() => console.log('等待密碼輸入框超時'));
+                        
+                        // 輸入帳號密碼
+                        await page.type('input[name="account"]', ID_NUMBER);
+                        await page.type('input[name="password"]', PASSWORD);
+                        console.log('已輸入帳號密碼！');
+                        
                         // 等待並點擊確認按鈕
                         console.log('等待確認按鈕出現...');
                         await page.waitForSelector('a.button-fill.button-large.color_deep_main', {
