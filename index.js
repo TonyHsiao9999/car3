@@ -138,7 +138,7 @@ async function bookCar() {
             
             // 點擊「民眾登入」按鈕
             console.log('點擊「民眾登入」按鈕...');
-            const citizenLoginButton = await page.evaluate(() => {
+            const loginButton = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
                 const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
                 if (loginBtn) {
@@ -148,7 +148,7 @@ async function bookCar() {
                 return false;
             });
             
-            if (!citizenLoginButton) {
+            if (!loginButton) {
                 throw new Error('找不到「民眾登入」按鈕');
             }
             
@@ -163,11 +163,11 @@ async function bookCar() {
             await page.type('input[name="password"]', PASSWORD, { delay: 100 });
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // 點擊「登入」按鈕
-            console.log('點擊「登入」按鈕...');
-            const loginButton = await page.evaluate(() => {
+            // 點擊「民眾登入」按鈕（登入表單中的按鈕）
+            console.log('點擊登入表單中的「民眾登入」按鈕...');
+            const formLoginButton = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
-                const loginBtn = buttons.find(btn => btn.textContent.trim() === '登入');
+                const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
                 if (loginBtn) {
                     loginBtn.click();
                     return true;
@@ -175,8 +175,8 @@ async function bookCar() {
                 return false;
             });
             
-            if (!loginButton) {
-                throw new Error('找不到「登入」按鈕');
+            if (!formLoginButton) {
+                throw new Error('找不到登入表單中的「民眾登入」按鈕');
             }
             
             // 等待登入結果
