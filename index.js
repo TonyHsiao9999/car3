@@ -227,6 +227,59 @@ async function debugLoginEnvironment(page) {
     console.log('=== 環境檢查結束 ===');
 }
 
+async function waitForDialog(page, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      console.log(`嘗試等待對話框 (第 ${i + 1} 次)...`);
+      
+      // 等待頁面加載完成
+      await page.waitForFunction(() => {
+        return document.readyState === 'complete';
+      }, { timeout: 30000 });
+      
+      // 檢查多個可能的選擇器
+      const selectors = [
+        '.dialog-button',
+        '.dialog .button',
+        '.dialog-button.button',
+        'button:contains("我知道了")',
+        '[class*="dialog"] button',
+        '[class*="modal"] button'
+      ];
+      
+      for (const selector of selectors) {
+        try {
+          console.log(`嘗試選擇器: ${selector}`);
+          const element = await page.waitForSelector(selector, { timeout: 5000 });
+          if (element) {
+            console.log(`找到按鈕: ${selector}`);
+            await element.click();
+            return true;
+          }
+        } catch (e) {
+          console.log(`選擇器 ${selector} 未找到`);
+        }
+      }
+      
+      // 如果沒有找到按鈕，檢查頁面內容
+      const pageContent = await page.content();
+      console.log('頁面內容檢查:', pageContent.substring(0, 500));
+      
+      // 等待一段時間後重試
+      console.log('等待 5 秒後重試...');
+      await page.waitForTimeout(5000);
+      
+    } catch (error) {
+      console.log(`第 ${i + 1} 次等待對話框失敗:`, error.message);
+      if (i < maxRetries - 1) {
+        console.log('等待 5 秒後重試...');
+        await page.waitForTimeout(5000);
+      }
+    }
+  }
+  return false;
+}
+
 async function bookCar() {
     let browser;
     try {
@@ -239,8 +292,16 @@ async function bookCar() {
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
-                '--window-size=1920x1080'
+                '--window-size=1920x1080',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials'
             ],
+            ignoreHTTPSErrors: true,
+            defaultViewport: {
+                width: 1920,
+                height: 1080
+            },
             timeout: 120000
         });
 
@@ -291,6 +352,23 @@ async function bookCar() {
           Object.defineProperty(window.screen, 'height', { get: () => env.screenHeight });
         });
 
+        // 設置 Cookie 相關的設定
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+        });
+
+        // 啟用 Cookie
+        const client = await page.target().createCDPSession();
+        await client.send('Network.enable');
+        await client.send('Network.setCookies', {
+            cookies: [{
+                name: 'cookieconsent_status',
+                value: 'dismiss',
+                domain: '.ntpc.ltc-car.org',
+                path: '/'
+            }]
+        });
+
         // 監聽錯誤
         page.on('error', err => {
             console.error('頁面錯誤：', err);
@@ -328,9 +406,17 @@ async function bookCar() {
 
         console.log('前往目標網頁...');
         await page.goto('https://www.ntpc.ltc-car.org/', {
-            waitUntil: 'networkidle0',
-            timeout: 30000
+            waitUntil: ['networkidle0', 'domcontentloaded'],
+            timeout: 60000
         });
+
+        // 等待頁面完全加載
+        await page.waitForFunction(() => {
+            return document.readyState === 'complete';
+        }, { timeout: 30000 });
+
+        // 等待可能的初始加載動畫
+        await page.waitForTimeout(5000);
 
         // 登入前檢查
         console.log('=== 登入前檢查 ===');
@@ -339,10 +425,15 @@ async function bookCar() {
         // 等待並點擊「我知道了」按鈕
         console.log('等待並點擊「我知道了」按鈕...');
         try {
-            await page.waitForSelector('.dialog-button', { timeout: 5000 });
-            await page.click('.dialog-button');
+          const dialogFound = await waitForDialog(page);
+          if (!dialogFound) {
+            console.log('未找到對話框，嘗試繼續執行...');
+            // 嘗試直接點擊頁面中心
+            await page.mouse.click(page.viewport().width / 2, page.viewport().height / 2);
+          }
         } catch (error) {
-            console.log('找不到「我知道了」按鈕，繼續執行...');
+          console.log('處理對話框時發生錯誤:', error.message);
+          console.log('繼續執行...');
         }
 
         // 登入流程
