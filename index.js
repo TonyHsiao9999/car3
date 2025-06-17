@@ -557,28 +557,49 @@ async function bookCar() {
           }
         });
 
+        // 送出後 log 當前網址
+        const currentUrl = await page.url();
+        console.error('送出後當前網址：', currentUrl);
+
         console.log('已點擊送出預約按鈕');
         await wait(2000);  // 等待 2 秒
 
-        // 等待浮動視窗出現
+        // 等待浮動視窗出現，timeout 提升到 60 秒，並每 2 秒 log 一次狀態
         console.log('等待浮動視窗出現...');
-        const dialogContent = await page.waitForFunction(
-          () => {
+        let foundDialog = null;
+        const start = Date.now();
+        while (Date.now() - start < 60000) { // 最多等 60 秒
+          foundDialog = await page.evaluate(() => {
             const dialog = document.querySelector('.dialog') || 
                           document.querySelector('.el-message-box__wrapper') ||
-                          document.querySelector('.el-message-box');
+                          document.querySelector('.el-message-box') ||
+                          document.querySelector('.modal');
             if (dialog) {
-              console.log('浮動視窗狀態：', {
+              return {
                 className: dialog.className,
                 textContent: dialog.textContent,
                 style: window.getComputedStyle(dialog)
-              });
-              return dialog.textContent;
+              };
             }
             return null;
-          },
-          { timeout: 30000 }
-        );
+          });
+          if (foundDialog) {
+            console.error('偵測到浮動視窗：', foundDialog);
+            break;
+          } else {
+            const allDialogs = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll('.dialog, .el-message-box__wrapper, .el-message-box, .modal')).map(d => ({
+                className: d.className,
+                textContent: d.textContent
+              }));
+            });
+            console.error('目前頁面所有 dialog/modal 元素：', allDialogs);
+          }
+          await wait(2000);
+        }
+        if (!foundDialog) {
+          throw new Error('60 秒內未偵測到浮動視窗');
+        }
 
         // 檢查預約結果
         console.log('檢查預約結果...');
