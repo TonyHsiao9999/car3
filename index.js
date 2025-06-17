@@ -275,36 +275,53 @@ async function waitForDialog(page, maxRetries = 3) {
                 '.dialog-button.button',
                 'button:contains("我知道了")',
                 '[class*="dialog"] button',
-                '[class*="modal"] button'
+                '[class*="modal"] button',
+                '.dialog-content button',
+                '.modal-content button',
+                'button.button-fill',
+                'button.button',
+                'button[type="button"]',
+                'button:not([disabled])'
             ];
             
+            // 先檢查頁面內容
+            const pageContent = await page.content();
+            log('頁面內容檢查: ' + pageContent.substring(0, 500), 'info', true);
+            
+            // 嘗試點擊所有可能的按鈕
             for (const selector of selectors) {
                 try {
                     log(`嘗試選擇器: ${selector}`, 'info', true);
-                    const element = await page.waitForSelector(selector, { timeout: 5000 });
-                    if (element) {
-                        log(`找到按鈕: ${selector}`, 'info', true);
-                        await element.click();
-                        return true;
+                    const elements = await page.$$(selector);
+                    if (elements.length > 0) {
+                        log(`找到 ${elements.length} 個按鈕: ${selector}`, 'info', true);
+                        for (const element of elements) {
+                            try {
+                                const isVisible = await element.isVisible();
+                                if (isVisible) {
+                                    log(`點擊可見按鈕: ${selector}`, 'info', true);
+                                    await element.click();
+                                    return true;
+                                }
+                            } catch (e) {
+                                log(`點擊按鈕失敗: ${e.message}`, 'info', true);
+                            }
+                        }
                     }
                 } catch (e) {
                     log(`選擇器 ${selector} 未找到`, 'info', true);
                 }
             }
             
-            // 如果沒有找到按鈕，檢查頁面內容
-            const pageContent = await page.content();
-            log('頁面內容檢查: ' + pageContent.substring(0, 500), 'info', true);
-            
-            // 等待一段時間後重試
-            log('等待 5 秒後重試...', 'info', true);
-            await delay(5000);
+            // 如果沒有找到按鈕，等待一段時間後重試
+            log('等待 10 秒後重試...', 'info', true);
+            await delay(10000);
             
         } catch (error) {
             log(`第 ${i + 1} 次等待對話框失敗: ${error.message}`, 'error', true);
             if (i < maxRetries - 1) {
-                log('等待 5 秒後重試...', 'info', true);
-                await delay(5000);
+                log('等待 10 秒後重試...', 'info', true);
+                await delay(10000);
             }
         }
     }
