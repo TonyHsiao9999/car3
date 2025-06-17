@@ -126,69 +126,142 @@ async function bookCar() {
 
         // 填入登入表單
         console.log('填入登入表單...\n');
-        await page.evaluate((id, pwd) => {
-            const idInput = document.querySelector('input[name="IDNumber"]');
-            const pwdInput = document.querySelector('input[name="password"]');
-            if (idInput) idInput.value = id;
-            if (pwdInput) pwdInput.value = pwd;
-        }, userId, userPassword);
         
+        // 先清空輸入框
+        await page.evaluate(() => {
+          const idInput = document.querySelector('input[name="IDNumber"]');
+          const pwdInput = document.querySelector('input[name="password"]');
+          if (idInput) idInput.value = '';
+          if (pwdInput) pwdInput.value = '';
+        });
         await page.waitForTimeout(1000);
-
+        
+        // 使用 type 方法輸入
+        console.log('正在輸入身分證字號...\n');
+        await page.type('input[name="IDNumber"]', userId, { delay: 100 });
+        await page.waitForTimeout(1000);
+        
+        console.log('正在輸入密碼...\n');
+        await page.type('input[name="password"]', userPassword, { delay: 100 });
+        await page.waitForTimeout(1000);
+        
         // 確認帳號密碼是否確實填入
         const idNumberValue = await page.evaluate(() => {
-            const input = document.querySelector('input[name="IDNumber"]');
-            return input ? input.value : '';
+          const input = document.querySelector('input[name="IDNumber"]');
+          return input ? input.value : '';
         });
         const passwordValue = await page.evaluate(() => {
-            const input = document.querySelector('input[name="password"]');
-            return input ? input.value : '';
+          const input = document.querySelector('input[name="password"]');
+          return input ? input.value : '';
         });
 
+        console.log('檢查輸入值：');
+        console.log(`身分證字號：${idNumberValue}`);
+        console.log(`密碼：${passwordValue}\n`);
+
         if (idNumberValue !== userId || passwordValue !== userPassword) {
-            console.log('帳號密碼未正確填入，重試中...\n');
-            // 清空輸入框
-            await page.evaluate(() => {
-                const idInput = document.querySelector('input[name="IDNumber"]');
-                const pwdInput = document.querySelector('input[name="password"]');
-                if (idInput) idInput.value = '';
-                if (pwdInput) pwdInput.value = '';
-            });
-            await page.waitForTimeout(1000);
+          console.log('帳號密碼未正確填入，重試中...\n');
+          // 清空輸入框
+          await page.evaluate(() => {
+            const idInput = document.querySelector('input[name="IDNumber"]');
+            const pwdInput = document.querySelector('input[name="password"]');
+            if (idInput) idInput.value = '';
+            if (pwdInput) pwdInput.value = '';
+          });
+          await page.waitForTimeout(1000);
 
-            // 重新填入
-            await page.evaluate((id, pwd) => {
-                const idInput = document.querySelector('input[name="IDNumber"]');
-                const pwdInput = document.querySelector('input[name="password"]');
-                if (idInput) idInput.value = id;
-                if (pwdInput) pwdInput.value = pwd;
-            }, userId, userPassword);
-            
-            await page.waitForTimeout(1000);
-
-            // 再次確認
-            const retryIdNumberValue = await page.evaluate(() => {
-                const input = document.querySelector('input[name="IDNumber"]');
-                return input ? input.value : '';
-            });
-            const retryPasswordValue = await page.evaluate(() => {
-                const input = document.querySelector('input[name="password"]');
-                return input ? input.value : '';
-            });
-
-            if (retryIdNumberValue !== userId || retryPasswordValue !== userPassword) {
-                throw new Error('無法正確填入帳號密碼');
+          // 使用 JavaScript 直接設定值
+          console.log('使用 JavaScript 直接設定值...\n');
+          await page.evaluate((id, pwd) => {
+            const idInput = document.querySelector('input[name="IDNumber"]');
+            const pwdInput = document.querySelector('input[name="password"]');
+            if (idInput) {
+              idInput.value = id;
+              idInput.dispatchEvent(new Event('input', { bubbles: true }));
+              idInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
+            if (pwdInput) {
+              pwdInput.value = pwd;
+              pwdInput.dispatchEvent(new Event('input', { bubbles: true }));
+              pwdInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, userId, userPassword);
+          
+          await page.waitForTimeout(1000);
+
+          // 再次確認
+          const retryIdNumberValue = await page.evaluate(() => {
+            const input = document.querySelector('input[name="IDNumber"]');
+            return input ? input.value : '';
+          });
+          const retryPasswordValue = await page.evaluate(() => {
+            const input = document.querySelector('input[name="password"]');
+            return input ? input.value : '';
+          });
+
+          console.log('重試後檢查輸入值：');
+          console.log(`身分證字號：${retryIdNumberValue}`);
+          console.log(`密碼：${retryPasswordValue}\n`);
+
+          if (retryIdNumberValue !== userId || retryPasswordValue !== userPassword) {
+            throw new Error('無法正確填入帳號密碼');
+          }
         }
 
         console.log('帳號密碼已確認填入！\n');
 
         // 點擊民眾登入按鈕
-        console.log('點擊表單內的「民眾登入」按鈕...\n');
+        console.log('準備點擊民眾登入按鈕...\n');
         const loginButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-        if (loginButton) {
-            await loginButton.click();
-            console.log('已點擊民眾登入按鈕！\n');
+        if (!loginButton) {
+          throw new Error('找不到民眾登入按鈕');
+        }
+
+        // 檢查按鈕是否可見和可點擊
+        const isVisible = await loginButton.isVisible();
+        const isEnabled = await page.evaluate(button => {
+          return !button.disabled && !button.classList.contains('disabled');
+        }, loginButton);
+
+        console.log(`按鈕狀態：可見=${isVisible}, 可點擊=${isEnabled}\n`);
+
+        if (!isVisible || !isEnabled) {
+          throw new Error('民眾登入按鈕不可見或不可點擊');
+        }
+
+        // 使用 JavaScript 點擊按鈕
+        console.log('使用 JavaScript 點擊按鈕...\n');
+        await page.evaluate(button => {
+          button.click();
+        }, loginButton);
+
+        console.log('已點擊民眾登入按鈕，等待回應...\n');
+        await page.waitForTimeout(5000);
+
+        // 檢查是否有錯誤訊息
+        const errorMessage = await page.evaluate(() => {
+          const errorElement = document.querySelector('.error-message');
+          return errorElement ? errorElement.textContent : null;
+        });
+
+        if (errorMessage) {
+          console.log(`登入錯誤：${errorMessage}\n`);
+          throw new Error(`登入失敗：${errorMessage}`);
+        }
+
+        // 等待確認按鈕出現
+        console.log('等待確認按鈕出現...\n');
+        try {
+          const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
+          if (confirmButton) {
+            console.log('找到確認按鈕，準備點擊...\n');
+            await confirmButton.click();
+            console.log('已點擊確認按鈕！\n');
+            await page.waitForTimeout(5000);
+          }
+        } catch (error) {
+          console.log('確認按鈕未出現，可能登入失敗或頁面結構改變\n');
+          throw error;
         }
 
         // 等待頁面導航
