@@ -446,54 +446,45 @@ async function bookCar() {
         await wait(2000);
         await page.screenshot({ path: 'after_select_options.png', fullPage: true });
 
-        // 點擊下一步
-        await page.click('.page_bottom > .button');
-        await wait(5000);  // 增加等待時間到 5 秒
-        await page.screenshot({ path: 'after_click_next.png', fullPage: true });
-
-        // 等待頁面載入完成
-        await page.waitForFunction(
-          () => {
-            // 檢查頁面是否還在載入中
-            const loadingIndicator = document.querySelector('.loading');
-            if (loadingIndicator) return false;
-            
-            // 檢查送出按鈕是否存在且可點擊
-            const button = document.querySelector('button.button-fill:nth-child(2)');
-            if (!button) return false;
-            
-            const style = window.getComputedStyle(button);
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   style.opacity !== '0' &&
-                   !button.disabled;
-          },
-          { timeout: 30000 }  // 等待最多 30 秒
-        );
-
-        // 再次確認按鈕狀態
-        const buttonState = await page.evaluate(() => {
-          const button = document.querySelector('button.button-fill:nth-child(2)');
-          if (!button) return { exists: false };
-          
-          const style = window.getComputedStyle(button);
-          return {
-            exists: true,
-            display: style.display,
-            visibility: style.visibility,
-            opacity: style.opacity,
-            disabled: button.disabled,
-            text: button.textContent.trim()
+        // 在送出按鈕之前收集所有資訊
+        console.error('=== 系統資訊 ===');
+        const debugInfo = await page.evaluate(async () => {
+          const data = {
+            userAgent: navigator.userAgent,
+            formData: {},
+            windowSize: {
+              innerWidth: window.innerWidth,
+              innerHeight: window.innerHeight,
+              outerWidth: window.outerWidth,
+              outerHeight: window.outerHeight
+            },
+            screen: {
+              width: screen.width,
+              height: screen.height
+            },
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            locale: navigator.language
           };
+
+          // 收集所有表單資料
+          document.querySelectorAll('input, select, textarea').forEach(el => {
+            if (el.type === 'checkbox' || el.type === 'radio') {
+              data.formData[el.name || el.id] = el.checked;
+            } else {
+              data.formData[el.name || el.id] = el.value;
+            }
+          });
+
+          return data;
         });
 
-        console.log('送出按鈕狀態：', buttonState);
+        const cookies = await page.cookies();
+        debugInfo.cookies = cookies;
 
-        if (!buttonState.exists || buttonState.disabled) {
-          throw new Error('送出按鈕不可用');
-        }
+        console.error('系統偵錯資訊：', JSON.stringify(debugInfo, null, 2));
+        console.error('=== 系統資訊結束 ===');
 
-        // 點擊送出預約
+        // 點擊送出按鈕
         await page.click('button.button-fill:nth-child(2)');
         console.log('已點擊送出預約按鈕');
         await wait(2000);  // 等待 2 秒
@@ -518,15 +509,15 @@ async function bookCar() {
           { timeout: 30000 }
         );
 
-        // 檢查預約結果並自動點擊對話框按鈕
+        // 檢查預約結果
         console.log('檢查預約結果...');
-        const appointmentInfo = {
+        const bookingInfo = {
           '日期': selectedDate.text,
           '時間': `${selectedTime.hour}:${selectedTime.minute}`,
           '執行環境': process.env.NODE_ENV || 'development',
           '時間戳記': new Date().toISOString()
         };
-        console.log('預約資訊：', appointmentInfo);
+        console.log('預約資訊：', bookingInfo);
 
         // 等待並檢查浮動視窗內容
         let success = false;
@@ -665,33 +656,6 @@ async function bookCar() {
             await wait(2000);
           }
         }
-
-        // 1. 記錄 userAgent
-        const userAgent = await page.evaluate(() => navigator.userAgent);
-        // 2. 記錄 cookies
-        const cookies = await page.cookies();
-        // 3. 記錄所有表單資料
-        const formData = await page.evaluate(() => {
-          const data = {};
-          document.querySelectorAll('input, select, textarea').forEach(el => {
-            if (el.type === 'checkbox' || el.type === 'radio') {
-              data[el.name || el.id] = el.checked;
-            } else {
-              data[el.name || el.id] = el.value;
-            }
-          });
-          return data;
-        });
-        // 將 log 內容合併到錯誤訊息
-        let extraLog = '';
-        try {
-          extraLog = '\n[User-Agent] ' + userAgent +
-                     '\n[Cookies] ' + JSON.stringify(cookies) +
-                     '\n[FormData] ' + JSON.stringify(formData);
-        } catch (e) {
-          extraLog = '\n[Log merge error] ' + e.message;
-        }
-        console.error('發生錯誤：', error, extraLog);
     } catch (error) {
         console.error('發生錯誤：', error);
         if (browser) {
