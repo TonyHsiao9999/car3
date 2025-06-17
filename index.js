@@ -147,113 +147,86 @@ async function bookCar() {
             });
         });
 
-        // 等待 Vue 應用程式載入
-        console.log('等待 Vue 應用程式載入...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 直接點擊「我知道了」按鈕
-        console.log('點擊「我知道了」按鈕...');
+        // 等待頁面完全載入
+        console.log('等待頁面載入完成...');
+        await page.waitForTimeout(5000);
+
+        // 嘗試點擊「我知道了」按鈕
+        console.log('嘗試點擊「我知道了」按鈕...');
         try {
-            await page.waitForSelector('span.dialog-button', { visible: true, timeout: 2000 });
-            await page.evaluate(() => {
-                const button = document.querySelector('span.dialog-button');
+            await retry(async () => {
+                const button = await page.waitForSelector('button.btn-primary', { timeout: 5000 });
                 if (button) {
-                    button.scrollIntoView();
-                    button.click();
+                    await button.click();
+                    console.log('已點擊「我知道了」按鈕！');
                 }
             });
-            console.log('已點擊「我知道了」按鈕！');
         } catch (error) {
             console.log('找不到「我知道了」按鈕，繼續執行...');
         }
-        
+
         // 等待頁面載入完成
         console.log('等待頁面載入完成...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
+        await page.waitForTimeout(5000);
+
         // 輸入身分證字號
         console.log('輸入身分證字號...');
-        await page.waitForSelector('input#IDNumber');
-        await page.type('input#IDNumber', process.env.CAR_BOOKING_ID, { delay: 100 });
-        
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtID"]', { timeout: 60000 });
+            await page.type('input[name="ctl00$ContentPlaceHolder1$txtID"]', ID_NUMBER, { delay: 100 });
+        });
+
         // 輸入密碼
         console.log('輸入密碼...');
-        await page.waitForSelector('input#password');
-        await page.type('input#password', process.env.CAR_BOOKING_PASSWORD, { delay: 100 });
-        
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtPassword"]', { timeout: 60000 });
+            await page.type('input[name="ctl00$ContentPlaceHolder1$txtPassword"]', PASSWORD, { delay: 100 });
+        });
+
         // 點擊登入按鈕
         console.log('點擊登入按鈕...');
-        await page.waitForSelector('a.button-fill:nth-child(2)', { visible: true });
-        await page.evaluate(() => {
-            const button = document.querySelector('a.button-fill:nth-child(2)');
-            if (button) {
-                button.scrollIntoView();
-                button.click();
-            }
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$btnLogin"]', { timeout: 60000 });
+            await page.click('input[name="ctl00$ContentPlaceHolder1$btnLogin"]');
         });
-        
+
         // 等待登入成功
         console.log('等待登入成功...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 點擊成功確認按鈕
-        console.log('點擊成功確認按鈕...');
+        await page.waitForTimeout(5000);
+
+        // 檢查是否有錯誤訊息
+        const errorMessage = await page.evaluate(() => {
+            const errorElement = document.querySelector('.alert-danger');
+            return errorElement ? errorElement.textContent : null;
+        });
+
+        if (errorMessage) {
+            throw new Error(`登入失敗：${errorMessage}`);
+        }
+
+        // 點擊成功確認按鈕（如果存在）
         try {
-            await page.waitForSelector('span.dialog-button', { visible: true, timeout: 2000 });
-            await page.evaluate(() => {
-                const button = document.querySelector('span.dialog-button');
-                if (button) {
-                    button.scrollIntoView();
-                    button.click();
+            await retry(async () => {
+                const confirmButton = await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$btnConfirm"]', { timeout: 5000 });
+                if (confirmButton) {
+                    await confirmButton.click();
+                    console.log('已點擊成功確認按鈕！');
                 }
             });
-            console.log('已點擊成功確認按鈕！');
         } catch (error) {
             console.log('找不到成功確認按鈕，繼續執行...');
         }
-        
-        // 等待頁面載入
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
+        // 等待頁面載入完成
+        await page.waitForTimeout(5000);
+
         // 點擊預約連結
         console.log('點擊預約連結...');
-        try {
-            await page.waitForSelector('a.link:nth-child(2)', { visible: true });
-            await page.evaluate(() => {
-                const link = document.querySelector('a.link:nth-child(2)');
-                if (link) {
-                    link.scrollIntoView();
-                    link.click();
-                }
-            });
-            console.log('已點擊預約連結！');
-        } catch (error) {
-            console.log('找不到預約連結，嘗試其他方式...');
-            // 嘗試點擊其他可能的預約連結
-            const bookingSelectors = [
-                'a[href*="booking"]',
-                'a:contains("預約")',
-                'a:contains("訂車")',
-                'a:contains("叫車")'
-            ];
-            
-            for (const selector of bookingSelectors) {
-                try {
-                    await page.waitForSelector(selector, { visible: true, timeout: 2000 });
-                    await page.evaluate((sel) => {
-                        const link = document.querySelector(sel);
-                        if (link) {
-                            link.scrollIntoView();
-                            link.click();
-                        }
-                    }, selector);
-                    console.log(`已點擊預約連結 (${selector})！`);
-                    break;
-                } catch (error) {
-                    console.log(`無法點擊 ${selector}，嘗試下一個...`);
-                }
-            }
-        }
+        await retry(async () => {
+            await page.waitForSelector('a[href*="booking"]', { timeout: 60000 });
+            await page.click('a[href*="booking"]');
+        });
+        console.log('已點擊預約連結！');
         
         // 等待預約頁面載入
         console.log('等待預約頁面載入...');
