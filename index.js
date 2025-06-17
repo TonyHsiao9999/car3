@@ -104,22 +104,23 @@ async function bookCar() {
     try {
         console.log('啟動瀏覽器...');
         browser = await puppeteer.launch({
-            headless: 'new',  // 使用新的無頭模式
+            headless: 'new',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
-                '--window-size=1920x1080',
-                '--lang=zh-TW,zh;q=0.9,en;q=0.8',
-                '--accept-lang=zh-TW,zh;q=0.9,en;q=0.8'
-            ]
+                '--window-size=1920x1080'
+            ],
+            timeout: 120000
         });
 
         console.log('開啟新頁面...');
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
+        await page.setDefaultNavigationTimeout(120000);
+        await page.setDefaultTimeout(120000);
         // 設定 User-Agent
         await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
 
@@ -379,37 +380,43 @@ async function bookCar() {
         // 檢查預約結果
         console.log('檢查預約結果...');
         
-        // 等待並檢查預約結果
-        const bookingResult = await page.waitForFunction(
-          () => {
-            const dialog = document.querySelector('.dialog');
-            if (!dialog) return false;
-            const dialogText = dialog.textContent;
-            return dialogText.includes('已完成預約') || 
-                   dialogText.includes('預約成功') || 
-                   dialogText.includes('預約完成') || 
-                   dialogText.includes('預約已成功') ||
-                   dialogText.includes('預約重複');
-          },
-          { timeout: 60000 }  // 增加等待時間到 60 秒
-        );
-        
-        if (bookingResult) {
+        // 修改等待預約結果的部分
+        try {
+          await page.waitForFunction(
+            () => {
+              const dialog = document.querySelector('.el-dialog__body');
+              return dialog && (
+                dialog.textContent.includes('已完成預約') ||
+                dialog.textContent.includes('預約成功') ||
+                dialog.textContent.includes('預約完成') ||
+                dialog.textContent.includes('預約已成功') ||
+                dialog.textContent.includes('預約重複')
+              );
+            },
+            { timeout: 120000 }
+          );
+
           console.log('恭喜預約成功！');
-          await page.screenshot({ path: 'booking_success.png', fullPage: true });
+          await page.screenshot({ path: 'booking_success.png' });
           
           // 嘗試點擊確認按鈕
           try {
-            const confirmButton = await page.waitForSelector('.dialog-button', { timeout: 5000 });
+            const confirmButton = await page.waitForSelector('.el-button--primary', { timeout: 10000 });
             if (confirmButton) {
               await confirmButton.click();
+              await page.waitForTimeout(2000);
             }
-          } catch (error) {
+          } catch (buttonError) {
             console.log('找不到確認按鈕，繼續執行...');
           }
-        } else {
-          console.log('預約可能失敗');
-          await page.screenshot({ path: 'booking_failed.png', fullPage: true });
+        } catch (timeoutError) {
+          console.log('等待預約結果超時，嘗試檢查頁面狀態...');
+          const dialog = await page.$('.el-dialog__body');
+          if (dialog) {
+            const dialogText = await page.evaluate(el => el.textContent, dialog);
+            console.log('對話框內容:', dialogText);
+          }
+          throw timeoutError;
         }
     } catch (error) {
         console.error('發生錯誤：', error);
