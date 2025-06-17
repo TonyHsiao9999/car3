@@ -665,6 +665,28 @@ async function bookCar() {
             await wait(2000);
           }
         }
+
+        // 1. 記錄 userAgent
+        const userAgent = await page.evaluate(() => navigator.userAgent);
+        console.log('User-Agent:', userAgent);
+
+        // 2. 記錄 cookies
+        const cookies = await page.cookies();
+        console.log('Cookies:', cookies);
+
+        // 3. 記錄所有表單資料
+        const formData = await page.evaluate(() => {
+          const data = {};
+          document.querySelectorAll('input, select, textarea').forEach(el => {
+            if (el.type === 'checkbox' || el.type === 'radio') {
+              data[el.name || el.id] = el.checked;
+            } else {
+              data[el.name || el.id] = el.value;
+            }
+          });
+          return data;
+        });
+        console.log('送出前的表單資料:', formData);
     } catch (error) {
         console.error('發生錯誤：', error);
         if (browser) {
