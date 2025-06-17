@@ -231,12 +231,25 @@ async function bookCar() {
 
         // 使用 JavaScript 點擊按鈕
         console.log('使用 JavaScript 點擊按鈕...\n');
-        await page.evaluate(button => {
-          button.click();
-        }, loginButton);
+        await page.evaluate(button => button.click(), loginButton);
+        console.log('已點擊民眾登入按鈕，等待回應...');
 
-        console.log('已點擊民眾登入按鈕，等待回應...\n');
+        // 等待 5 秒讓頁面反應
         await page.waitForTimeout(5000);
+
+        // 輸出目前網址
+        const currentUrl = await page.evaluate(() => window.location.href);
+        console.log('登入後目前網址：', currentUrl);
+
+        // 輸出所有 dialog-button 文字（登入後）
+        const dialogButtonsAfterLogin = await page.$$eval('span.dialog-button', btns =>
+          btns.map(btn => btn.textContent.trim())
+        );
+        console.log('目前所有 dialog-button 文字：', dialogButtonsAfterLogin);
+
+        // 輸出 body 前 500 字
+        const bodyPreview = await page.evaluate(() => document.body.innerText.slice(0, 500));
+        console.log('body 頁面預覽：', bodyPreview);
 
         // 檢查是否有錯誤訊息
         const errorMessage = await page.evaluate(() => {
