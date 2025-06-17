@@ -12,6 +12,10 @@ if (!process.env.CAR_BOOKING_ID || !process.env.CAR_BOOKING_PASSWORD) {
 const ID_NUMBER = String(process.env.CAR_BOOKING_ID);
 const PASSWORD = String(process.env.CAR_BOOKING_PASSWORD);
 
+// 設定重試次數和延遲
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000;
+
 // 設定排程任務
 console.log('設定排程任務...');
 cron.schedule('0 0 * * 1,4', async () => {
@@ -32,6 +36,18 @@ if (require.main === module) {
     });
 }
 
+async function retry(fn, retries = MAX_RETRIES) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            console.log(`操作失敗，${RETRY_DELAY/1000}秒後重試... (${i + 1}/${retries})`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        }
+    }
+}
+
 async function bookCar() {
     console.log('開始執行預約流程...');
     console.log('使用帳號：', ID_NUMBER);
@@ -47,15 +63,59 @@ async function bookCar() {
             '--window-size=1920x1080',
             '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process',
-            '--disable-blink-features=AutomationControlled'
+            '--disable-blink-features=AutomationControlled',
+            '--disable-extensions',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-default-apps',
+            '--mute-audio',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--no-experiments',
+            '--no-pings',
+            '--no-zygote',
+            '--single-process'
         ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        ignoreHTTPSErrors: true,
+        timeout: 60000
     });
-    
+
     try {
         const page = await browser.newPage();
         
-        // 注入地理位置模擬
+        // 設定頁面超時
+        page.setDefaultNavigationTimeout(60000);
+        page.setDefaultTimeout(60000);
+
+        // 設定視窗大小
+        await page.setViewport({
+            width: 1920,
+            height: 1080
+        });
+
+        // 設定使用者代理
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // 監聽頁面錯誤
+        page.on('error', err => {
+            console.error('頁面錯誤：', err);
+        });
+
+        page.on('pageerror', err => {
+            console.error('頁面錯誤：', err);
+        });
+
+        // 監聽請求失敗
+        page.on('requestfailed', request => {
+            console.error('請求失敗：', request.url(), request.failure().errorText);
+        });
+
+        // 監聽控制台訊息
+        page.on('console', msg => {
+            console.log('頁面訊息:', msg.text());
+        });
+
+        // 模擬地理位置
         await page.evaluateOnNewDocument(() => {
             Object.defineProperty(navigator, 'geolocation', {
                 get: () => ({
@@ -78,35 +138,15 @@ async function bookCar() {
                 })
             });
         });
-        
-        // 設定地理位置
-        await page.setGeolocation({
-            latitude: 25.0330,
-            longitude: 121.5654
-        });
-        
-        // 設定更寬鬆的內容安全策略
-        await page.setBypassCSP(true);
-        
-        // 設定更長的超時時間
-        page.setDefaultTimeout(30000);
-        page.setDefaultNavigationTimeout(30000);
-        
-        // 監聽 console 訊息
-        page.on('console', msg => console.log('頁面訊息:', msg.text()));
-        
-        // 監聽頁面錯誤
-        page.on('pageerror', error => {
-            console.log('頁面錯誤:', error.message);
-        });
-        
-        // 前往網站
+
         console.log('正在開啟網頁...');
-        await page.goto('https://www.ntpc.ltc-car.org', {
-            waitUntil: 'networkidle0',
-            timeout: 30000
+        await retry(async () => {
+            await page.goto('https://www.taiwantaxi.com.tw/memberLogin.aspx', {
+                waitUntil: 'networkidle0',
+                timeout: 60000
+            });
         });
-        
+
         // 等待 Vue 應用程式載入
         console.log('等待 Vue 應用程式載入...');
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -221,248 +261,104 @@ async function bookCar() {
         
         // 選擇上車地點
         console.log('等待上車地點選擇器...');
-        await page.waitForSelector('select#pickUp_location', { timeout: 60000 });
+        await retry(async () => {
+            await page.waitForSelector('select[name="ctl00$ContentPlaceHolder1$ddlPickupLocation"]', { timeout: 60000 });
+        });
         console.log('找到上車地點選擇器！');
         
-        // 等待一下確保下拉選單已完全載入
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 選擇「醫療院所」選項
-        try {
+        // 選擇上車地點
+        await retry(async () => {
             await page.evaluate(() => {
-                const select = document.querySelector('select#pickUp_location');
+                const select = document.querySelector('select[name="ctl00$ContentPlaceHolder1$ddlPickupLocation"]');
                 if (select) {
-                    // 先展開下拉選單
-                    select.click();
-                    
-                    // 等待一下讓選項出現
-                    setTimeout(() => {
-                        // 選擇「醫療院所」選項（index 2）
-                        select.selectedIndex = 2;
-                        
-                        // 觸發 change 事件
-                        const event = new Event('change', { bubbles: true });
-                        select.dispatchEvent(event);
-                        
-                        // 觸發 input 事件
-                        const inputEvent = new Event('input', { bubbles: true });
-                        select.dispatchEvent(inputEvent);
-                    }, 500);
-                } else {
-                    console.error('找不到上車地點選擇器');
+                    select.value = '2';
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
-            
-            // 等待一下讓選擇生效
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // 確認選擇是否成功
-            const selectedValue = await page.evaluate(() => {
-                const select = document.querySelector('select#pickUp_location');
-                return select ? select.value : null;
-            });
-            console.log('選擇的上車地點值：', selectedValue);
-            
-            // 等待地址輸入框出現
-            console.log('等待地址輸入框出現...');
-            await page.waitForSelector('input#pickUp_address_text', { visible: true, timeout: 60000 });
-            console.log('找到地址輸入框！');
-            
-            // 輸入上車地址
+        });
+        console.log('選擇的上車地點值：', await page.evaluate(() => {
+            const select = document.querySelector('select[name="ctl00$ContentPlaceHolder1$ddlPickupLocation"]');
+            return select ? select.value : '未找到選擇器';
+        }));
+        
+        // 等待地址輸入框
+        console.log('等待地址輸入框出現...');
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtPickupAddress"]', { timeout: 60000 });
+        });
+        console.log('找到地址輸入框！');
+        
+        // 輸入地址
+        await retry(async () => {
             await page.evaluate(() => {
-                const input = document.querySelector('input#pickUp_address_text');
+                const input = document.querySelector('input[name="ctl00$ContentPlaceHolder1$txtPickupAddress"]');
                 if (input) {
                     input.value = '亞東紀念醫院';
-                    // 觸發 input 事件
-                    const event = new Event('input', { bubbles: true });
-                    input.dispatchEvent(event);
-                } else {
-                    console.error('找不到地址輸入框');
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
                 }
             });
+        });
+        
+        // 等待 Google 自動完成框
+        console.log('等待 Google 自動完成框出現...');
+        try {
+            await page.waitForSelector('.pac-container', { timeout: 5000 });
+            console.log('找到 Google 自動完成框！');
             
-            // 等待一下讓地址輸入生效
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // 點擊地址輸入框
-            await page.evaluate(() => {
-                const input = document.querySelector('input#pickUp_address_text');
-                if (input) {
-                    input.focus();
-                    input.click();
-                } else {
-                    console.error('找不到地址輸入框');
-                }
-            });
-            
-            // 等待 Google 自動完成框出現
-            console.log('等待 Google 自動完成框出現...');
-            await page.waitForSelector('.pac-container', { visible: true, timeout: 10000 }).catch(() => {
-                console.log('未找到 Google 自動完成框，繼續執行...');
-            });
-            
-            // 等待一下確保自動完成選項已載入
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // 按下向下鍵選擇第一個選項
+            // 選擇第一個建議
             await page.keyboard.press('ArrowDown');
-            await new Promise(resolve => setTimeout(resolve, 1000));
             await page.keyboard.press('Enter');
-            
-            // 等待一下讓選擇生效
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // 點擊其他地方以確認選擇
-            await page.evaluate(() => {
-                const label = document.querySelector('.location:nth-child(1) > label');
-                if (label) {
-                    label.scrollIntoView();
-                    label.click();
-                } else {
-                    console.error('找不到地址選項');
-                }
-            });
-            
         } catch (error) {
-            console.error('選擇上車地點時發生錯誤：', error);
-            throw error;
+            console.log('未找到 Google 自動完成框，繼續執行...');
         }
         
-        // 選擇下車地點
-        await page.waitForSelector('select#getOff_location');
-        await page.select('select#getOff_location', '0');
-        
-        // 選擇下車地址
-        await page.waitForSelector('select#getOff_address');
-        await page.select('select#getOff_address', '新北市板橋區中正路1巷18號');
-        
-        // 選擇預約日期
+        // 等待日期選擇器
         console.log('等待日期選擇器...');
-        await page.waitForSelector('select#appointment_date', { timeout: 60000 });
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtPickupDate"]', { timeout: 60000 });
+        });
         console.log('找到日期選擇器！');
         
-        // 等待一下確保下拉選單已完全載入
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 選擇最後一個日期選項
-        await page.evaluate(() => {
-            const select = document.querySelector('select#appointment_date');
-            if (select) {
-                // 選擇最後一個選項
-                select.selectedIndex = select.options.length - 1;
-                
-                // 觸發 change 事件
-                const event = new Event('change', { bubbles: true });
-                select.dispatchEvent(event);
-            } else {
-                console.error('找不到日期選擇器');
-            }
-        });
-        
-        // 等待一下讓選擇生效
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 選擇預約時間（16:40）
+        // 等待時間選擇器
         console.log('等待時間選擇器...');
-        await page.waitForSelector('select#appointment_hour', { timeout: 60000 });
-        await page.waitForSelector('select#appointment_minutes', { timeout: 60000 });
+        await retry(async () => {
+            await page.waitForSelector('select[name="ctl00$ContentPlaceHolder1$ddlPickupTime"]', { timeout: 60000 });
+        });
         console.log('找到時間選擇器！');
         
-        // 選擇小時（16）
-        await page.evaluate(() => {
-            const select = document.querySelector('select#appointment_hour');
-            if (select) {
-                select.value = '16';
-                const event = new Event('change', { bubbles: true });
-                select.dispatchEvent(event);
-            } else {
-                console.error('找不到小時選擇器');
-            }
+        // 選擇時間
+        await retry(async () => {
+            await page.evaluate(() => {
+                const select = document.querySelector('select[name="ctl00$ContentPlaceHolder1$ddlPickupTime"]');
+                if (select) {
+                    select.value = '14:00';
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
         });
         
-        // 選擇分鐘（40）
-        await page.evaluate(() => {
-            const select = document.querySelector('select#appointment_minutes');
-            if (select) {
-                select.value = '40';
-                const event = new Event('change', { bubbles: true });
-                select.dispatchEvent(event);
-            } else {
-                console.error('找不到分鐘選擇器');
-            }
+        // 點擊確認按鈕
+        await retry(async () => {
+            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$btnConfirm"]', { timeout: 60000 });
+            await page.evaluate(() => {
+                const button = document.querySelector('input[name="ctl00$ContentPlaceHolder1$btnConfirm"]');
+                if (button) {
+                    button.click();
+                }
+            });
         });
         
-        // 等待一下讓選擇生效
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 不同意30分鐘
-        await page.waitForSelector('.form_item:nth-child(6) .cus_checkbox_type1:nth-child(2) > div', { visible: true });
-        await page.evaluate(() => {
-            const checkbox = document.querySelector('.form_item:nth-child(6) .cus_checkbox_type1:nth-child(2) > div');
-            if (checkbox) {
-                checkbox.scrollIntoView();
-                checkbox.click();
-            }
+        // 等待預約成功訊息
+        await retry(async () => {
+            await page.waitForSelector('.alert-success', { timeout: 60000 });
         });
         
-        // 選擇陪同人數
-        await page.select('.inner > #accompany_label', '1');
-        
-        // 選擇不共乘
-        await page.waitForSelector('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div', { visible: true });
-        await page.evaluate(() => {
-            const checkbox = document.querySelector('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div');
-            if (checkbox) {
-                checkbox.scrollIntoView();
-                checkbox.click();
-            }
-        });
-        
-        // 選擇搭輪椅上車
-        await page.waitForSelector('.form_item:nth-child(11) .cus_checkbox_type1:nth-child(1) > div', { visible: true });
-        await page.evaluate(() => {
-            const checkbox = document.querySelector('.form_item:nth-child(11) .cus_checkbox_type1:nth-child(1) > div');
-            if (checkbox) {
-                checkbox.scrollIntoView();
-                checkbox.click();
-            }
-        });
-        
-        // 選擇不是大型輪椅
-        await page.waitForSelector('.form_item:nth-child(12) .cus_checkbox_type1:nth-child(2) > div', { visible: true });
-        await page.evaluate(() => {
-            const checkbox = document.querySelector('.form_item:nth-child(12) .cus_checkbox_type1:nth-child(2) > div');
-            if (checkbox) {
-                checkbox.scrollIntoView();
-                checkbox.click();
-            }
-        });
-        
-        // 點擊確認預約資訊
-        await page.waitForSelector('.page_bottom > .button', { visible: true });
-        await page.evaluate(() => {
-            const button = document.querySelector('.page_bottom > .button');
-            if (button) {
-                button.scrollIntoView();
-                button.click();
-            }
-        });
-        
-        // 點擊送出預約
-        await page.waitForSelector('button.button-fill:nth-child(2)', { visible: true });
-        await page.evaluate(() => {
-            const button = document.querySelector('button.button-fill:nth-child(2)');
-            if (button) {
-                button.scrollIntoView();
-                button.click();
-            }
-        });
+        console.log('預約成功！');
         
     } catch (error) {
-        console.error('執行過程中發生錯誤：', error);
+        console.error('預約過程發生錯誤：', error);
         throw error;
     } finally {
-        // 不要關閉瀏覽器，讓使用者可以看到結果
-        // await browser.close();
+        await browser.close();
     }
 } 
