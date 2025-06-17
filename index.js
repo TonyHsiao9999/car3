@@ -281,31 +281,38 @@ async function waitForDialog(page, maxRetries = 3) {
 }
 
 async function bookCar() {
-    let browser;
-    try {
-        console.log('啟動瀏覽器...');
-        browser = await puppeteer.launch({
-            headless: 'new',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu',
-                '--window-size=1920x1080',
-                '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-site-isolation-trials'
-            ],
-            ignoreHTTPSErrors: true,
-            defaultViewport: {
-                width: 1920,
-                height: 1080
-            },
-            timeout: 120000
-        });
+    console.log('=== 開始執行預約任務 ===');
+    console.log('環境變數檢查:');
+    console.log('- ID_NUMBER:', process.env.ID_NUMBER ? '已設置' : '未設置');
+    console.log('- CAR_BOOKING_PASSWORD:', process.env.CAR_BOOKING_PASSWORD ? '已設置' : '未設置');
+    console.log('- PICKUP_LOCATION:', process.env.PICKUP_LOCATION ? '已設置' : '未設置');
+    console.log('- DROP_OFF_ADDRESS:', process.env.DROP_OFF_ADDRESS ? '已設置' : '未設置');
+    
+    console.log('\n啟動瀏覽器...');
+    const browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--window-size=1920x1080',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-site-isolation-trials'
+        ],
+        ignoreHTTPSErrors: true,
+        defaultViewport: {
+            width: 1920,
+            height: 1080
+        },
+        timeout: 120000
+    });
+    console.log('瀏覽器啟動成功');
 
-        console.log('開啟新頁面...');
+    try {
+        console.log('\n開啟新頁面...');
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setDefaultNavigationTimeout(120000);
@@ -383,6 +390,7 @@ async function bookCar() {
         // 啟用請求攔截
         await page.setRequestInterception(true);
         page.on('request', request => {
+            console.log(`請求: ${request.method()} ${request.url()}`);
             if (request.url().includes('login') || request.url().includes('auth')) {
                 console.log('登入請求:', {
                     url: request.url(),
@@ -395,6 +403,7 @@ async function bookCar() {
         });
 
         page.on('response', response => {
+            console.log(`回應: ${response.status()} ${response.url()}`);
             if (response.url().includes('login') || response.url().includes('auth')) {
                 console.log('登入回應:', {
                     url: response.url(),
@@ -1008,14 +1017,11 @@ async function bookCar() {
           }
         }
     } catch (error) {
-        console.error('發生錯誤：', error);
-        if (browser) {
-            await browser.close();
-        }
+        console.error('執行過程中發生錯誤:', error);
         throw error;
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        console.log('\n關閉瀏覽器...');
+        await browser.close();
+        console.log('瀏覽器已關閉');
     }
 } 
