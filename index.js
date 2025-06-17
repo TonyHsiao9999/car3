@@ -267,14 +267,22 @@ async function bookCar() {
             for (const selector of selectors) {
               try {
                 console.log(`嘗試尋找按鈕：${selector}\n`);
-                confirmButton = await page.waitForSelector(selector, { timeout: 5000 });
-                if (confirmButton) {
-                  const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
+                const buttons = await page.$$(selector);
+                
+                for (const button of buttons) {
+                  const buttonText = await page.evaluate(el => el.textContent.trim(), button);
                   console.log(`找到按鈕，文字為：${buttonText}\n`);
+                  
+                  // 只處理「確定」按鈕
                   if (buttonText === '確定') {
                     console.log('找到確定按鈕！\n');
+                    confirmButton = button;
                     break;
                   }
+                }
+                
+                if (confirmButton) {
+                  break;
                 }
               } catch (error) {
                 console.log(`使用選擇器 ${selector} 未找到按鈕\n`);
@@ -349,6 +357,8 @@ async function bookCar() {
                 console.log('重新整理後成功進入預約頁面！\n');
                 break;
               }
+            } else {
+              console.log('未找到確定按鈕\n');
             }
 
             retryCount++;
