@@ -54,7 +54,7 @@ async function waitAndClick(page, selector, timeout = 10000) {
         throw new Error(`找不到元素：${selector}`);
     }
     await element.click();
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 }
 
 async function waitAndType(page, selector, text, timeout = 10000) {
@@ -63,7 +63,7 @@ async function waitAndType(page, selector, text, timeout = 10000) {
         throw new Error(`找不到元素：${selector}`);
     }
     await element.type(text, { delay: 100 });
-    await page.waitForTimeout(1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
 async function waitAndSelect(page, selector, value, timeout = 10000) {
@@ -72,7 +72,7 @@ async function waitAndSelect(page, selector, value, timeout = 10000) {
         throw new Error(`找不到元素：${selector}`);
     }
     await page.select(selector, value);
-    await page.waitForTimeout(1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
 async function bookCar() {
@@ -113,7 +113,7 @@ async function bookCar() {
             waitUntil: 'networkidle0', 
             timeout: 60000 
         });
-        await page.waitForTimeout(3000);
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         // 2. 點擊「我知道了」
         console.log('點擊「我知道了」按鈕...');
@@ -125,7 +125,7 @@ async function bookCar() {
         console.log('開始登入流程...');
         await retry(async () => {
             // 確保頁面完全載入
-            await page.waitForTimeout(3000);
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             // 等待並點擊「我知道了」按鈕
             console.log('點擊「我知道了」按鈕...');
@@ -134,22 +134,11 @@ async function bookCar() {
                 throw new Error('找不到「我知道了」按鈕');
             }
             await knowButton.click();
-            await page.waitForTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // 等待登入表單出現
-            console.log('等待登入表單...');
-            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
-            await page.waitForTimeout(1000);
-            
-            // 輸入登入資訊
-            console.log('輸入登入資訊...');
-            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
-            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
-            await page.waitForTimeout(1000);
-            
-            // 尋找並點擊登入按鈕
-            console.log('尋找登入按鈕...');
-            const loginButton = await page.evaluate(() => {
+            // 點擊「民眾登入」按鈕
+            console.log('點擊「民眾登入」按鈕...');
+            const citizenLoginButton = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
                 const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
                 if (loginBtn) {
@@ -159,13 +148,40 @@ async function bookCar() {
                 return false;
             });
             
+            if (!citizenLoginButton) {
+                throw new Error('找不到「民眾登入」按鈕');
+            }
+            
+            // 等待登入表單出現
+            console.log('等待登入表單...');
+            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 輸入登入資訊
+            console.log('輸入登入資訊...');
+            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
+            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 點擊「登入」按鈕
+            console.log('點擊「登入」按鈕...');
+            const loginButton = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
+                const loginBtn = buttons.find(btn => btn.textContent.trim() === '登入');
+                if (loginBtn) {
+                    loginBtn.click();
+                    return true;
+                }
+                return false;
+            });
+            
             if (!loginButton) {
-                throw new Error('找不到登入按鈕');
+                throw new Error('找不到「登入」按鈕');
             }
             
             // 等待登入結果
             console.log('等待登入結果...');
-            await page.waitForTimeout(5000);
+            await new Promise(resolve => setTimeout(resolve, 5000));
             
             // 檢查是否有錯誤訊息
             const errorMessage = await page.evaluate(() => {
@@ -177,21 +193,12 @@ async function bookCar() {
                 throw new Error(`登入失敗：${errorMessage}`);
             }
             
-            // 檢查是否仍在登入頁面
-            const currentUrl = await page.url();
-            if (currentUrl.includes('login') || currentUrl.includes('auth')) {
-                throw new Error('登入後仍在登入頁面');
-            }
-            
             // 等待登入成功訊息
             try {
                 await page.waitForFunction(
                     () => {
                         const dialogText = document.querySelector('div.dialog-text');
-                        return dialogText && (
-                            dialogText.textContent.includes('登入成功') ||
-                            dialogText.textContent.includes('成功')
-                        );
+                        return dialogText && dialogText.textContent.includes('登入成功');
                     },
                     { timeout: 15000 }
                 );
@@ -200,7 +207,7 @@ async function bookCar() {
                 const confirmButton = await page.waitForSelector('span.dialog-button', { visible: true });
                 if (confirmButton) {
                     await confirmButton.click();
-                    await page.waitForTimeout(3000);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                 }
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
@@ -227,7 +234,7 @@ async function bookCar() {
         await retry(async () => {
             await waitAndSelect(page, 'select[name="boarding_type"]', '醫療院所');
             await waitAndType(page, 'input[name="boarding_address"]', '亞東紀念醫院');
-            await page.waitForTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
             await waitAndClick(page, '.pac-item:first-child');
         });
 
