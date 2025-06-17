@@ -53,21 +53,51 @@ async function bookCar() {
     console.log(`使用帳號： ${ID_NUMBER}\n`);
 
     const browser = await puppeteer.launch({
-        headless: false,
-        defaultViewport: null,
-        args: ['--start-maximized']
+        headless: 'new',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--window-size=1920x1080'
+        ],
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        ignoreHTTPSErrors: true,
+        timeout: 60000
     });
 
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
 
+        // 設定頁面超時
+        page.setDefaultNavigationTimeout(60000);
+        page.setDefaultTimeout(60000);
+
+        // 監聽頁面錯誤
+        page.on('error', err => {
+            console.error('頁面錯誤：', err);
+        });
+
+        page.on('pageerror', err => {
+            console.error('頁面錯誤：', err);
+        });
+
+        // 監聽請求失敗
+        page.on('requestfailed', request => {
+            console.error('請求失敗：', request.url(), request.failure().errorText);
+        });
+
+        // 監聽控制台訊息
+        page.on('console', msg => {
+            console.log('頁面訊息:', msg.text());
+        });
+
         console.log('正在開啟網頁...\n');
         await page.goto('https://www.ntpc.ltc-car.org/', { waitUntil: 'networkidle0', timeout: 60000 });
 
-        // 監聽頁面訊息
-        page.on('console', msg => console.log('頁面訊息:', msg.text()));
-
+        // 等待頁面載入完成
         console.log('等待頁面載入完成...\n');
         await page.waitForTimeout(5000);
 
