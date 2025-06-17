@@ -132,11 +132,63 @@ async function bookCar() {
         // 4. 等待並點擊登入成功的確定按鈕
         console.log('等待登入成功確認...');
         await retry(async () => {
-            await page.waitForFunction(
-                () => document.querySelector('div.dialog-text')?.textContent.includes('登入成功'),
-                { timeout: 10000 }
-            );
-            await waitAndClick(page, 'span.dialog-button');
+            // 等待頁面載入完成
+            await page.waitForTimeout(5000);
+
+            // 檢查是否有錯誤訊息
+            const errorMessage = await page.evaluate(() => {
+                const errorElement = document.querySelector('.error-message');
+                return errorElement ? errorElement.textContent : null;
+            });
+
+            if (errorMessage) {
+                console.log(`登入錯誤：${errorMessage}`);
+                throw new Error(`登入失敗：${errorMessage}`);
+            }
+
+            // 等待登入成功訊息
+            try {
+                await page.waitForFunction(
+                    () => {
+                        const dialogText = document.querySelector('div.dialog-text');
+                        return dialogText && dialogText.textContent.includes('登入成功');
+                    },
+                    { timeout: 15000 }
+                );
+                console.log('找到登入成功訊息');
+
+                // 等待確定按鈕出現
+                await page.waitForFunction(
+                    () => {
+                        const buttons = Array.from(document.querySelectorAll('span.dialog-button'));
+                        return buttons.some(btn => btn.textContent.trim() === '確定');
+                    },
+                    { timeout: 15000 }
+                );
+                console.log('找到確定按鈕');
+
+                // 點擊確定按鈕
+                const confirmButton = await page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('span.dialog-button'));
+                    const confirmBtn = buttons.find(btn => btn.textContent.trim() === '確定');
+                    if (confirmBtn) {
+                        confirmBtn.click();
+                        return true;
+                    }
+                    return false;
+                });
+
+                if (!confirmButton) {
+                    throw new Error('無法點擊確定按鈕');
+                }
+                console.log('已點擊確定按鈕');
+
+                // 等待頁面跳轉
+                await page.waitForTimeout(5000);
+            } catch (error) {
+                console.log('等待登入成功訊息時發生錯誤：', error.message);
+                throw error;
+            }
         });
 
         // 5. 點擊「新增預約」
