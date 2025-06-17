@@ -18,10 +18,13 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # 建立工作目錄
 WORKDIR /app
 
-# 複製專案檔案
+# 複製 package.json 和 package-lock.json
 COPY package*.json ./
-RUN npm install
 
+# 安裝依賴
+RUN npm install --production
+
+# 複製其他檔案
 COPY . .
 
 # 啟動應用程式
