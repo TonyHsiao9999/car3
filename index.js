@@ -168,25 +168,30 @@ async function bookCar() {
                 }
 
                 if (!isBookingPage) {
-                    console.log(`第 ${retryCount + 1} 次檢查：不在預約頁面，等待確認按鈕...\n`);
+                    console.log(`第 ${retryCount + 1} 次檢查：不在預約頁面，等待確定按鈕...\n`);
                     
-                    // 等待並點擊確認按鈕
+                    // 等待並點擊確定按鈕
                     try {
                         const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
                         if (confirmButton) {
-                            await confirmButton.click();
-                            console.log('已點擊確認按鈕！\n');
-                            
-                            // 等待頁面導航
-                            await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-                                console.log('等待頁面導航超時，繼續執行...\n');
-                            });
-                            
-                            // 等待頁面載入
-                            await page.waitForTimeout(5000);
+                            const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
+                            if (buttonText === '確定') {
+                                await confirmButton.click();
+                                console.log('已點擊確定按鈕！\n');
+                                
+                                // 等待頁面導航
+                                await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+                                    console.log('等待頁面導航超時，繼續執行...\n');
+                                });
+                                
+                                // 等待頁面載入
+                                await page.waitForTimeout(5000);
+                            } else {
+                                console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
+                            }
                         }
                     } catch (error) {
-                        console.log('找不到確認按鈕，繼續執行...\n');
+                        console.log('找不到確定按鈕，繼續執行...\n');
                     }
                 }
             } catch (error) {
