@@ -127,28 +127,44 @@ async function bookCar() {
             // 確保頁面完全載入
             await page.waitForTimeout(3000);
             
-            // 輸入登入資訊
-            await waitAndType(page, 'input[name="IDNumber"]', ID_NUMBER);
-            await waitAndType(page, 'input[name="password"]', PASSWORD);
+            // 等待並點擊「我知道了」按鈕
+            console.log('點擊「我知道了」按鈕...');
+            const knowButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            if (!knowButton) {
+                throw new Error('找不到「我知道了」按鈕');
+            }
+            await knowButton.click();
+            await page.waitForTimeout(2000);
             
-            // 等待並點擊登入按鈕
-            const loginButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            // 等待登入表單出現
+            console.log('等待登入表單...');
+            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
+            await page.waitForTimeout(1000);
+            
+            // 輸入登入資訊
+            console.log('輸入登入資訊...');
+            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
+            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
+            await page.waitForTimeout(1000);
+            
+            // 尋找並點擊登入按鈕
+            console.log('尋找登入按鈕...');
+            const loginButton = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
+                const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
+                if (loginBtn) {
+                    loginBtn.click();
+                    return true;
+                }
+                return false;
+            });
+            
             if (!loginButton) {
                 throw new Error('找不到登入按鈕');
             }
             
-            // 確保按鈕可點擊
-            await page.waitForFunction(
-                () => {
-                    const btn = document.querySelector('a.button-fill.button-large.color_deep_main');
-                    return btn && !btn.disabled && btn.offsetParent !== null;
-                },
-                { timeout: 5000 }
-            );
-            
-            await loginButton.click();
-            
             // 等待登入結果
+            console.log('等待登入結果...');
             await page.waitForTimeout(5000);
             
             // 檢查是否有錯誤訊息
