@@ -8,11 +8,13 @@
   "deploy": {
     "startCommand": "npm start",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 100,
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   },
   "env": {
+    "NODE_VERSION": "22",
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
     "ID_NUMBER": "A102574899",
     "CAR_BOOKING_PASSWORD": "visi319VISI",
     "PICKUP_LOCATION": "亞東紀念醫院",
