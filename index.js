@@ -126,13 +126,14 @@ async function bookCar() {
         await retry(async () => {
             // 等待登入表單出現
             console.log('等待登入表單...');
-            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
+            await page.waitForSelector('input[type="text"]', { visible: true });
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             // 輸入登入資訊
             console.log('輸入登入資訊...');
-            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
-            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
+            const inputs = await page.$$('input[type="text"], input[type="password"]');
+            await inputs[0].type(ID_NUMBER, { delay: 100 });
+            await inputs[1].type(PASSWORD, { delay: 100 });
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             // 點擊「民眾登入」按鈕
@@ -156,7 +157,7 @@ async function bookCar() {
             try {
                 await page.waitForFunction(
                     () => {
-                        const dialogText = document.querySelector('div.dialog-text');
+                        const dialogText = document.querySelector('.dialog-text');
                         return dialogText && dialogText.textContent.includes('登入成功');
                     },
                     { timeout: 15000 }
@@ -164,7 +165,7 @@ async function bookCar() {
                 
                 // 點擊確定按鈕
                 console.log('點擊確定按鈕...');
-                const confirmButton = await page.waitForSelector('span.dialog-button', { visible: true });
+                const confirmButton = await page.waitForSelector('.dialog-button', { visible: true });
                 if (confirmButton) {
                     await confirmButton.click();
                     await new Promise(resolve => setTimeout(resolve, 3000));
