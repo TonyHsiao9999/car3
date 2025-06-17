@@ -166,31 +166,96 @@ async function bookCar() {
 
         // 登入流程
         console.log('開始登入流程...');
-        await page.type('input#IDNumber', 'A102574899');
-        await page.type('input#password', 'visi319VISI');
+        await page.type('input#IDNumber', ID_NUMBER);
+        await page.type('input#password', PASSWORD);
         await page.screenshot({ path: 'after_input_login.png', fullPage: true });
         
         await page.click('a.button-fill');
-        await wait(2000);
+        await wait(5000);  // 增加等待時間到 5 秒
         await page.screenshot({ path: 'after_click_login.png', fullPage: true });
 
         // 等待登入成功對話框
-        await page.waitForSelector('.dialog-button', { timeout: 5000 });
+        await page.waitForSelector('.dialog-button', { timeout: 10000 });
         await page.click('.dialog-button');
         await page.screenshot({ path: 'after_login_success.png', fullPage: true });
 
         // 點擊新增預約
-        await page.click('a.link:nth-child(2)');
-        await wait(2000);
-        await page.screenshot({ path: 'after_click_new_booking.png', fullPage: true });
+        console.log('點擊新增預約按鈕...');
+        try {
+          await page.waitForSelector('a.link', { timeout: 10000 });
+          const links = await page.$$('a.link');
+          let found = false;
+          for (const link of links) {
+            const text = await page.evaluate(el => el.textContent.trim(), link);
+            console.log('找到連結：', text);
+            if (text === '新增預約') {
+              await link.click();
+              console.log('已點擊新增預約按鈕');
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            throw new Error('找不到新增預約按鈕');
+          }
+          await wait(5000);  // 增加等待時間到 5 秒
+          await page.screenshot({ path: 'after_click_new_booking.png', fullPage: true });
+        } catch (e) {
+          console.error('點擊新增預約按鈕時發生錯誤：', e);
+          await page.screenshot({ path: 'error_click_new_booking.png', fullPage: true });
+          throw e;
+        }
+
+        // 點擊「預約訂車」按鈕
+        console.log('點擊預約訂車按鈕...');
+        try {
+          await page.waitForSelector('button.button-fill', { timeout: 10000 });
+          const buttons = await page.$$('button.button-fill');
+          for (const button of buttons) {
+            const text = await page.evaluate(el => el.textContent.trim(), button);
+            if (text === '預約訂車') {
+              await button.click();
+              console.log('已點擊預約訂車按鈕');
+              break;
+            }
+          }
+          await wait(5000);  // 等待頁面載入
+          await page.screenshot({ path: 'after_click_book_car.png', fullPage: true });
+        } catch (e) {
+          console.error('點擊預約訂車按鈕時發生錯誤：', e);
+          await page.screenshot({ path: 'error_click_book_car.png', fullPage: true });
+          throw e;
+        }
+
+        // 等待頁面完全載入
+        console.log('等待頁面完全載入...');
+        await page.waitForFunction(
+          () => {
+            // 檢查頁面是否還在載入中
+            const loadingIndicator = document.querySelector('.loading');
+            if (loadingIndicator) return false;
+            
+            // 檢查上車地點選單是否存在且可見
+            const select = document.querySelector('select#pickUp_location');
+            if (!select) return false;
+            
+            const style = window.getComputedStyle(select);
+            return style.display !== 'none' && 
+                   style.visibility !== 'hidden' && 
+                   style.opacity !== '0';
+          },
+          { timeout: 30000 }  // 增加等待時間到 30 秒
+        );
 
         // 等待上車地點下拉選單出現，並截圖
         try {
-          // 使用更通用的選擇器
-          await page.waitForSelector('select#pickUp_location', {timeout: 15000});
+          await page.waitForSelector('select#pickUp_location', { timeout: 30000 });  // 增加等待時間到 30 秒
           await page.screenshot({ path: 'before_select_location.png', fullPage: true });
         } catch (e) {
           console.error('等待上車地點下拉選單超時，錯誤：', e);
+          // 儲存當前 HTML 內容以便調試
+          const html = await page.content();
+          console.log('頁面 HTML：', html);
           await page.screenshot({ path: 'error_wait_location.png', fullPage: true });
           throw e;
         }
