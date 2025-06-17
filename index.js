@@ -285,7 +285,7 @@ async function bookCar() {
 
         // 選擇預約日期和時間
         console.log('選擇預約日期...');
-        await page.evaluate(() => {
+        const selectedDate = await page.evaluate(() => {
           const select = document.querySelector('select#appointment_date');
           if (select) {
             const options = Array.from(select.options);
@@ -293,26 +293,37 @@ async function bookCar() {
             select.value = lastOption.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
             select.dispatchEvent(new Event('input', { bubbles: true }));
+            return {
+              value: lastOption.value,
+              text: lastOption.text
+            };
           }
+          return null;
         });
+        console.log('選擇的預約日期：', selectedDate);
         await wait(2000);
         await page.screenshot({ path: 'after_select_date.png', fullPage: true });
 
         console.log('選擇預約時間...');
-        await page.evaluate(() => {
+        const selectedTime = await page.evaluate(() => {
           const hourSelect = document.querySelector('select#appointment_hour');
           const minuteSelect = document.querySelector('select#appointment_minutes');
+          let hour = '', minute = '';
           if (hourSelect) {
             hourSelect.value = '16';
+            hour = hourSelect.value;
             hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
             hourSelect.dispatchEvent(new Event('input', { bubbles: true }));
           }
           if (minuteSelect) {
             minuteSelect.value = '40';
+            minute = minuteSelect.value;
             minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
             minuteSelect.dispatchEvent(new Event('input', { bubbles: true }));
           }
+          return { hour, minute };
         });
+        console.log('選擇的預約時間：', selectedTime);
         await wait(2000);
         await page.screenshot({ path: 'after_select_time.png', fullPage: true });
 
@@ -379,6 +390,13 @@ async function bookCar() {
 
         // 檢查預約結果並自動點擊對話框按鈕
         console.log('檢查預約結果...');
+        console.log('預約資訊：', {
+          日期: selectedDate?.text,
+          時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
+          執行環境: process.env.NODE_ENV || 'development',
+          時間戳記: new Date().toISOString()
+        });
+        
         try {
           let successFound = false;
           let retryCount = 0;
@@ -413,6 +431,17 @@ async function bookCar() {
 
             console.log('浮動視窗內容：', dialogContent);
 
+            // 如果是「此時段無法預約」，記錄詳細資訊
+            if (dialogContent.content.includes('此時段無法預約')) {
+              console.log('預約失敗資訊：', {
+                錯誤訊息: dialogContent.content,
+                選擇日期: selectedDate?.text,
+                選擇時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
+                執行環境: process.env.NODE_ENV || 'development',
+                時間戳記: new Date().toISOString()
+              });
+            }
+
             if (
               dialogContent.content.includes('已完成預約') ||
               dialogContent.content.includes('預約成功') ||
@@ -421,6 +450,13 @@ async function bookCar() {
               dialogContent.content.includes('預約重複')
             ) {
               console.log(`在 ${dialogContent.selector} 中找到成功訊息`);
+              console.log('預約成功資訊：', {
+                成功訊息: dialogContent.content,
+                選擇日期: selectedDate?.text,
+                選擇時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
+                執行環境: process.env.NODE_ENV || 'development',
+                時間戳記: new Date().toISOString()
+              });
               successFound = true;
               break;
             }
