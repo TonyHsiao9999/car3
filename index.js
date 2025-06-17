@@ -116,24 +116,35 @@ async function bookCar() {
         await new Promise(resolve => setTimeout(resolve, 3000));
 
         // 2. 點擊「我知道了」按鈕
-        console.log('點擊「我知道了」按鈕...');
+        console.log('等待並點擊「我知道了」按鈕...');
         await retry(async () => {
-            // 等待按鈕出現
+            // 等待對話框出現
             await new Promise(resolve => setTimeout(resolve, 3000));
             
             // 尋找並點擊「我知道了」按鈕
-            const knowButton = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('a.button-fill'));
-                const button = buttons.find(btn => btn.textContent.trim() === '我知道了');
-                if (button) {
-                    button.click();
-                    return true;
+            const dialogResult = await page.evaluate(() => {
+                // 先找到對話框
+                const dialog = document.querySelector('.dialog-text');
+                if (!dialog) {
+                    return { found: false, message: '找不到對話框' };
                 }
-                return false;
+                
+                // 在對話框中找「我知道了」按鈕
+                const dialogButton = document.querySelector('.dialog-button');
+                if (!dialogButton) {
+                    return { found: false, message: '找不到對話框按鈕' };
+                }
+                
+                // 點擊按鈕
+                dialogButton.click();
+                return { found: true };
             });
             
-            if (!knowButton) {
-                throw new Error('找不到「我知道了」按鈕');
+            if (!dialogResult.found) {
+                // 如果找不到按鈕，截圖當前畫面以便檢查
+                await page.screenshot({ path: 'dialog_not_found.png', fullPage: true });
+                console.log('錯誤原因：', dialogResult.message);
+                throw new Error('找不到對話框或按鈕');
             }
             
             // 等待按鈕點擊後的效果
