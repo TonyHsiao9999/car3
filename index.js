@@ -257,55 +257,28 @@ async function bookCar() {
 
         while (retryCount < maxRetries) {
           try {
-            // 嘗試不同的選擇器
-            const selectors = [
-              'span.dialog-button',
-              '.modal-dialog span.dialog-button',
-              '.popup span.dialog-button',
-              'a.button-fill.button-large.color_deep_main'
-            ];
-
-            for (const selector of selectors) {
-              try {
-                console.log(`嘗試尋找按鈕：${selector}\n`);
-                const buttons = await page.$$(selector);
-                console.log(`找到 ${buttons.length} 個按鈕\n`);
-                
-                for (const button of buttons) {
-                  const buttonInfo = await page.evaluate(el => {
-                    return {
-                      text: el.textContent.trim(),
-                      tagName: el.tagName,
-                      className: el.className,
-                      id: el.id,
-                      parentHTML: el.parentElement ? el.parentElement.outerHTML : 'no parent'
-                    };
-                  }, button);
-                  
-                  console.log('按鈕詳細資訊：');
-                  console.log(`文字：${buttonInfo.text}`);
-                  console.log(`標籤：${buttonInfo.tagName}`);
-                  console.log(`類別：${buttonInfo.className}`);
-                  console.log(`ID：${buttonInfo.id}`);
-                  console.log(`父元素：${buttonInfo.parentHTML}\n`);
-                  
-                  // 只處理「確定」按鈕
-                  if (buttonInfo.text === '確定') {
-                    console.log('找到確定按鈕！\n');
-                    confirmButton = button;
-                    break;
-                  }
-                }
-                
-                if (confirmButton) {
-                  break;
-                }
-              } catch (error) {
-                console.log(`使用選擇器 ${selector} 未找到按鈕\n`);
+            // 先尋找「登入成功」文字
+            console.log('尋找「登入成功」文字...\n');
+            const successText = await page.evaluate(() => {
+              const elements = Array.from(document.querySelectorAll('*'));
+              const successElement = elements.find(el => el.textContent.trim() === '登入成功');
+              if (successElement) {
+                console.log('找到「登入成功」文字\n');
+                // 尋找最近的按鈕元素
+                const button = successElement.closest('.modal-dialog')?.querySelector('span.dialog-button') ||
+                              successElement.closest('.popup')?.querySelector('span.dialog-button');
+                return button ? {
+                  text: button.textContent.trim(),
+                  element: button
+                } : null;
               }
-            }
+              return null;
+            });
 
-            if (confirmButton) {
+            if (successText && successText.text === '確定') {
+              console.log('找到確定按鈕！\n');
+              confirmButton = await page.evaluateHandle(() => successText.element);
+              
               // 確保按鈕可見和可點擊
               const isConfirmVisible = await confirmButton.isVisible();
               const isConfirmEnabled = await page.evaluate(button => {
@@ -374,7 +347,7 @@ async function bookCar() {
                 break;
               }
             } else {
-              console.log('未找到確定按鈕\n');
+              console.log('未找到「登入成功」文字或確定按鈕\n');
             }
 
             retryCount++;
