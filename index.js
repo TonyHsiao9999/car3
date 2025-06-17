@@ -124,119 +124,83 @@ async function bookCar() {
         // 3. 登入流程
         console.log('開始登入流程...');
         await retry(async () => {
+            // 確保頁面完全載入
+            await page.waitForTimeout(3000);
+            
+            // 輸入登入資訊
             await waitAndType(page, 'input[name="IDNumber"]', ID_NUMBER);
             await waitAndType(page, 'input[name="password"]', PASSWORD);
-            await waitAndClick(page, 'a.button-fill.button-large.color_deep_main');
-        });
-
-        // 4. 等待並點擊登入成功的確定按鈕
-        console.log('等待登入成功確認...');
-        await retry(async () => {
-            // 等待頁面載入完成
+            
+            // 等待並點擊登入按鈕
+            const loginButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            if (!loginButton) {
+                throw new Error('找不到登入按鈕');
+            }
+            
+            // 確保按鈕可點擊
+            await page.waitForFunction(
+                () => {
+                    const btn = document.querySelector('a.button-fill.button-large.color_deep_main');
+                    return btn && !btn.disabled && btn.offsetParent !== null;
+                },
+                { timeout: 5000 }
+            );
+            
+            await loginButton.click();
+            
+            // 等待登入結果
             await page.waitForTimeout(5000);
-
-            // 輸出目前頁面的 HTML 結構
-            const pageContent = await page.content();
-            console.log('目前頁面內容：', pageContent);
-
-            // 檢查所有 dialog 相關元素
-            const dialogElements = await page.evaluate(() => {
-                const elements = {
-                    dialogs: Array.from(document.querySelectorAll('div.dialog')),
-                    dialogTexts: Array.from(document.querySelectorAll('div.dialog-text')),
-                    dialogButtons: Array.from(document.querySelectorAll('span.dialog-button')),
-                    allButtons: Array.from(document.querySelectorAll('button, a.button-fill, span.dialog-button'))
-                };
-                return elements;
-            });
-            console.log('對話框相關元素：', JSON.stringify(dialogElements, null, 2));
-
+            
             // 檢查是否有錯誤訊息
             const errorMessage = await page.evaluate(() => {
-                const errorElement = document.querySelector('.error-message');
+                const errorElement = document.querySelector('.error-message, .dialog-text');
                 return errorElement ? errorElement.textContent : null;
             });
-
-            if (errorMessage) {
-                console.log(`登入錯誤：${errorMessage}`);
+            
+            if (errorMessage && errorMessage.includes('錯誤')) {
                 throw new Error(`登入失敗：${errorMessage}`);
             }
-
-            // 檢查目前 URL
+            
+            // 檢查是否仍在登入頁面
             const currentUrl = await page.url();
-            console.log('目前 URL：', currentUrl);
-
-            // 檢查頁面標題
-            const pageTitle = await page.title();
-            console.log('頁面標題：', pageTitle);
-
-            // 檢查是否有任何 JavaScript 錯誤
-            const jsErrors = await page.evaluate(() => {
-                return window.onerror ? window.onerror.toString() : 'No error handler';
-            });
-            console.log('JavaScript 錯誤處理器：', jsErrors);
-
+            if (currentUrl.includes('login') || currentUrl.includes('auth')) {
+                throw new Error('登入後仍在登入頁面');
+            }
+            
             // 等待登入成功訊息
             try {
-                // 先檢查是否有任何 dialog 元素
-                const hasDialog = await page.evaluate(() => {
-                    return document.querySelector('div.dialog') !== null;
-                });
-                console.log('是否有對話框：', hasDialog);
-
-                if (hasDialog) {
-                    // 如果有對話框，檢查其內容
-                    const dialogContent = await page.evaluate(() => {
-                        const dialog = document.querySelector('div.dialog');
-                        return dialog ? dialog.textContent : 'No dialog content';
-                    });
-                    console.log('對話框內容：', dialogContent);
-                }
-
                 await page.waitForFunction(
                     () => {
                         const dialogText = document.querySelector('div.dialog-text');
-                        return dialogText && dialogText.textContent.includes('登入成功');
+                        return dialogText && (
+                            dialogText.textContent.includes('登入成功') ||
+                            dialogText.textContent.includes('成功')
+                        );
                     },
                     { timeout: 15000 }
                 );
-                console.log('找到登入成功訊息');
-
-                // 等待確定按鈕出現
-                await page.waitForFunction(
-                    () => {
-                        const buttons = Array.from(document.querySelectorAll('span.dialog-button'));
-                        return buttons.some(btn => btn.textContent.trim() === '確定');
-                    },
-                    { timeout: 15000 }
-                );
-                console.log('找到確定按鈕');
-
+                
                 // 點擊確定按鈕
-                const confirmButton = await page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('span.dialog-button'));
-                    const confirmBtn = buttons.find(btn => btn.textContent.trim() === '確定');
-                    if (confirmBtn) {
-                        confirmBtn.click();
-                        return true;
-                    }
-                    return false;
-                });
-
-                if (!confirmButton) {
-                    throw new Error('無法點擊確定按鈕');
+                const confirmButton = await page.waitForSelector('span.dialog-button', { visible: true });
+                if (confirmButton) {
+                    await confirmButton.click();
+                    await page.waitForTimeout(3000);
                 }
-                console.log('已點擊確定按鈕');
-
-                // 等待頁面跳轉
-                await page.waitForTimeout(5000);
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
-                throw error;
+                // 檢查是否已經成功登入（可能沒有顯示成功訊息）
+                const isLoggedIn = await page.evaluate(() => {
+                    return !document.querySelector('input[name="IDNumber"]') && 
+                           !document.querySelector('input[name="password"]');
+                });
+                
+                if (!isLoggedIn) {
+                    throw new Error('無法確認登入狀態');
+                }
             }
         });
 
-        // 5. 點擊「新增預約」
+        // 4. 點擊「新增預約」
         console.log('點擊新增預約...');
         await retry(async () => {
             await waitAndClick(page, 'a.button-fill.button-large:has-text("新增預約")');
