@@ -313,6 +313,39 @@ async function bookCar() {
             if (firstButton) {
                 await firstButton.click();
                 console.log('已點擊第一個按鈕！');
+                
+                // 等待頁面導航完成
+                await page.waitForNavigation({ 
+                    waitUntil: 'networkidle0',
+                    timeout: 30000 
+                }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                
+                // 檢查是否在預約頁面
+                const isBookingPage = await page.evaluate(() => {
+                    return document.querySelector('#pickUp_location') !== null ||
+                           document.querySelector('select[name="pickUp_location"]') !== null ||
+                           document.querySelector('input[name="pickUp_location"]') !== null;
+                });
+                
+                if (!isBookingPage) {
+                    console.log('不在預約頁面，嘗試點擊其他按鈕...');
+                    // 嘗試點擊其他可能的按鈕
+                    const buttons = await page.$$('a.button-fill');
+                    for (const button of buttons) {
+                        const text = await page.evaluate(el => el.textContent.trim(), button);
+                        console.log('找到按鈕：', text);
+                        if (text && text !== '民眾登入') {
+                            await button.click();
+                            console.log('已點擊按鈕：', text);
+                            await page.waitForNavigation({ 
+                                waitUntil: 'networkidle0',
+                                timeout: 30000 
+                            }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                            break;
+                        }
+                    }
+                }
+                
                 return;
             }
 
@@ -321,7 +354,18 @@ async function bookCar() {
 
         // 等待預約頁面載入
         console.log('等待預約頁面載入...');
-        await page.waitForTimeout(5000);
+        await page.waitForTimeout(5000); // 先等待 5 秒
+        
+        // 檢查是否在預約頁面
+        const isBookingPage = await page.evaluate(() => {
+            return document.querySelector('#pickUp_location') !== null ||
+                   document.querySelector('select[name="pickUp_location"]') !== null ||
+                   document.querySelector('input[name="pickUp_location"]') !== null;
+        });
+        
+        if (!isBookingPage) {
+            throw new Error('無法進入預約頁面');
+        }
 
         // 選擇上車地點
         console.log('選擇上車地點...');
