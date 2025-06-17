@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const cron = require('node-cron');
 require('dotenv').config();
+const { waitForFunction } = require('puppeteer');
 
 // 檢查必要的環境變數
 if (!process.env.CAR_BOOKING_ID || !process.env.CAR_BOOKING_PASSWORD) {
@@ -75,291 +76,350 @@ async function waitAndSelect(page, selector, value, timeout = 10000) {
     await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
-async function bookCar() {
-    console.log('\n開始執行預約流程...\n');
-    
-    const browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--window-size=1920x1080'
-        ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        ignoreHTTPSErrors: true,
-        timeout: 60000
-    });
-
+async function handleLoginSuccess(page) {
     try {
+        // 等待登入成功對話框出現
+        await page.waitForFunction(
+            () => {
+                const dialog = document.querySelector('.el-message-box__wrapper');
+                return dialog && dialog.textContent.includes('登入成功');
+            },
+            { timeout: 10000 }
+        );
+
+        // 點擊確定按鈕
+        await page.click('.el-message-box__btns .el-button--primary');
+        
+        console.log('成功處理登入成功對話框');
+    } catch (error) {
+        console.log('處理登入成功對話框時發生錯誤:', error.message);
+    }
+}
+
+// 等待函數
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function bookCar() {
+    let browser;
+    try {
+        console.log('啟動瀏覽器...');
+        browser = await puppeteer.launch({
+            headless: 'new',  // 使用新的無頭模式
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+                '--window-size=1920x1080',
+                '--lang=zh-TW,zh;q=0.9,en;q=0.8',
+                '--accept-lang=zh-TW,zh;q=0.9,en;q=0.8'
+            ]
+        });
+
+        console.log('開啟新頁面...');
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
-        page.setDefaultNavigationTimeout(60000);
-        page.setDefaultTimeout(60000);
+        // 設定 User-Agent
+        await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
 
-        // 監聽各種錯誤
-        page.on('error', err => console.error('頁面錯誤：', err));
-        page.on('pageerror', err => console.error('頁面錯誤：', err));
+        // 設定地理位置權限
+        const context = browser.defaultBrowserContext();
+        await context.overridePermissions('https://www.ntpc.ltc-car.org', ['geolocation']);
+        await page.setGeolocation({ 
+            latitude: 25.0330, 
+            longitude: 121.5654,
+            accuracy: 100 
+        });
+
+        // 監聽錯誤
+        page.on('error', err => {
+            console.error('頁面錯誤：', err);
+            page.screenshot({ path: 'error.png', fullPage: true });
+        });
+        page.on('pageerror', err => {
+            console.error('頁面錯誤：', err);
+            page.screenshot({ path: 'page_error.png', fullPage: true });
+        });
         page.on('requestfailed', request => {
             console.error('請求失敗：', request.url(), request.failure().errorText);
+            page.screenshot({ path: 'request_failed.png', fullPage: true });
         });
-        page.on('console', msg => console.log('頁面訊息:', msg.text()));
 
-        // 1. 連線到網站
-        console.log('正在開啟網頁...');
-        await page.goto('https://www.ntpc.ltc-car.org/', { 
-            waitUntil: 'networkidle0', 
-            timeout: 60000 
+        console.log('前往目標網頁...');
+        await page.goto('https://www.ntpc.ltc-car.org/', {
+            waitUntil: 'networkidle0',
+            timeout: 30000
         });
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await page.screenshot({ path: 'after_load.png', fullPage: true });
 
-        // 2. 點擊「我知道了」按鈕
+        // 等待並點擊「我知道了」按鈕
         console.log('等待並點擊「我知道了」按鈕...');
-        await retry(async () => {
-            // 等待對話框出現
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            // 尋找並點擊「我知道了」按鈕
-            const dialogResult = await page.evaluate(() => {
-                // 印出所有可能的對話框元素
-                const possibleDialogs = document.querySelectorAll('.dialog-text, .dialog, .modal, .modal-text');
-                console.log('找到的對話框數量：', possibleDialogs.length);
-                
-                // 找到包含「我知道了」文字的按鈕
-                const buttons = Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'));
-                const buttonWithText = buttons.find(btn => btn.textContent.trim() === '我知道了');
-                
-                if (buttonWithText) {
-                    console.log('找到按鈕：', buttonWithText.outerHTML);
-                    buttonWithText.click();
-                    return { found: true };
-                }
-                
-                // 如果找不到，印出所有按鈕的文字和 HTML
-                const buttonTexts = buttons.map(btn => ({
-                    text: btn.textContent.trim(),
-                    html: btn.outerHTML
-                }));
-                
-                return {
-                    found: false,
-                    message: '找不到「我知道了」按鈕',
-                    buttons: buttonTexts
-                };
-            });
-            
-            if (!dialogResult.found) {
-                // 如果找不到按鈕，截圖當前畫面以便檢查
-                await page.screenshot({ path: 'dialog_not_found.png', fullPage: true });
-                console.log('錯誤原因：', dialogResult.message);
-                if (dialogResult.buttons) {
-                    console.log('頁面上的按鈕：', dialogResult.buttons);
-                }
-                throw new Error('找不到「我知道了」按鈕');
-            }
-            
-            // 等待按鈕點擊後的效果
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        });
+        try {
+            await page.waitForSelector('.dialog-button', { timeout: 5000 });
+            await page.click('.dialog-button');
+            await page.screenshot({ path: 'after_dialog.png', fullPage: true });
+        } catch (error) {
+            console.log('找不到「我知道了」按鈕，繼續執行...');
+        }
 
-        // 3. 登入流程
+        // 登入流程
         console.log('開始登入流程...');
-        await retry(async () => {
-            // 等待登入表單出現
-            console.log('等待登入表單...');
-            await page.waitForSelector('input[type="text"]', { visible: true });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 輸入登入資訊
-            console.log('輸入登入資訊...');
-            const inputs = await page.$$('input[type="text"], input[type="password"]');
-            await inputs[0].type(ID_NUMBER, { delay: 100 });
-            await inputs[1].type(PASSWORD, { delay: 100 });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 點擊「民眾登入」按鈕
-            console.log('點擊「民眾登入」按鈕...');
-            const loginButton = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'));
-                const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
-                if (loginBtn) {
-                    console.log('找到登入按鈕：', loginBtn.outerHTML);
-                    loginBtn.click();
-                    return true;
-                }
-                return false;
-            });
-            
-            if (!loginButton) {
-                // 如果找不到按鈕，截圖並印出所有按鈕
-                await page.screenshot({ path: 'login_button_not_found.png', fullPage: true });
-                const buttonTexts = await page.evaluate(() => {
-                    return Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'))
-                        .map(btn => ({
-                            text: btn.textContent.trim(),
-                            html: btn.outerHTML
-                        }));
-                });
-                console.log('頁面上的按鈕：', buttonTexts);
-                throw new Error('找不到「民眾登入」按鈕');
+        await page.type('input#IDNumber', 'A102574899');
+        await page.type('input#password', 'visi319VISI');
+        await page.screenshot({ path: 'after_input_login.png', fullPage: true });
+        
+        await page.click('a.button-fill');
+        await wait(2000);
+        await page.screenshot({ path: 'after_click_login.png', fullPage: true });
+
+        // 等待登入成功對話框
+        await page.waitForSelector('.dialog-button', { timeout: 5000 });
+        await page.click('.dialog-button');
+        await page.screenshot({ path: 'after_login_success.png', fullPage: true });
+
+        // 點擊新增預約
+        await page.click('a.link:nth-child(2)');
+        await wait(2000);
+        await page.screenshot({ path: 'after_click_new_booking.png', fullPage: true });
+
+        // 等待上車地點下拉選單出現，並截圖
+        try {
+          // 使用更通用的選擇器
+          await page.waitForSelector('select#pickUp_location', {timeout: 15000});
+          await page.screenshot({ path: 'before_select_location.png', fullPage: true });
+        } catch (e) {
+          console.error('等待上車地點下拉選單超時，錯誤：', e);
+          await page.screenshot({ path: 'error_wait_location.png', fullPage: true });
+          throw e;
+        }
+
+        // 選擇上車地點（醫療院所）
+        console.log('嘗試選擇上車地點...');
+        try {
+          // 直接設定選項值
+          await page.evaluate(() => {
+            const select = document.querySelector('select#pickUp_location');
+            if (select) {
+              select.value = '1';  // 設定為醫療院所的值
+              // 觸發必要的事件
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              select.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            
-            // 等待登入成功訊息
-            console.log('等待登入成功訊息...');
-            try {
-                // 等待「確定」按鈕出現
-                await page.waitForFunction(
-                    () => {
-                        const button = document.querySelector('.dialog-button');
-                        return button && button.textContent.trim() === '確定';
-                    },
-                    { timeout: 15000 }
-                );
-                
-                // 點擊「確定」按鈕
-                console.log('點擊確定按鈕...');
-                await page.evaluate(() => {
-                    const button = document.querySelector('.dialog-button');
-                    if (button && button.textContent.trim() === '確定') {
-                        button.click();
-                    }
-                });
-                
-                // 等待按鈕點擊後的效果
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                
-                // 等待「新增預約」按鈕出現
-                console.log('等待新增預約按鈕...');
-                await page.waitForFunction(
-                    () => {
-                        const buttons = Array.from(document.querySelectorAll('button, a, .button-fill'));
-                        return buttons.some(btn => 
-                            btn.textContent.trim() === '新增預約' || 
-                            btn.getAttribute('aria-label') === '新增預約'
-                        );
-                    },
-                    { timeout: 15000 }
-                );
-                
-                console.log('登入成功！');
-            } catch (error) {
-                console.log('等待登入成功訊息時發生錯誤：', error.message);
-                // 截圖並印出當前頁面狀態
-                await page.screenshot({ path: 'login_failed.png', fullPage: true });
-                const pageState = await page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('button, a, .button-fill'));
-                    return {
-                        hasLoginForm: !!document.querySelector('input[type="text"], input[type="password"]'),
-                        dialogText: Array.from(document.querySelectorAll('.dialog-text')).map(el => el.textContent.trim()),
-                        visibleButtons: buttons.map(btn => ({
-                            text: btn.textContent.trim(),
-                            ariaLabel: btn.getAttribute('aria-label'),
-                            html: btn.outerHTML
-                        }))
-                    };
-                });
-                console.log('頁面狀態：', pageState);
-                throw new Error('登入失敗：無法確認登入狀態');
+          });
+          
+          await wait(1000);
+          
+          // 截圖確認選擇結果
+          await page.screenshot({ path: 'after_location_select.png', fullPage: true });
+          
+          // 確認是否選擇成功
+          const selectedValue = await page.evaluate(() => {
+            const select = document.querySelector('select#pickUp_location');
+            return select ? select.value : null;
+          });
+          console.log('選擇的上車地點值:', selectedValue);
+          
+        } catch (e) {
+          console.error('選擇上車地點時發生錯誤：', e);
+          await page.screenshot({ path: 'error_location_select.png', fullPage: true });
+          throw e;
+        }
+
+        // 填入上車地點詳細地址
+        console.log('輸入上車地點詳細地址...');
+        await page.type('input#pickUp_address_text', '亞東紀念醫院');
+        await wait(2000);
+        
+        // 等待 Google Maps 自動完成結果出現
+        console.log('等待 Google Maps 自動完成結果...');
+        try {
+          await page.waitForSelector('.pac-item', { timeout: 15000 });
+          await page.screenshot({ path: 'before_select_google_result.png', fullPage: true });
+          
+          // 點擊第一個結果
+          await page.click('.pac-item:first-child');
+          await wait(2000);
+          await page.screenshot({ path: 'after_select_google_result.png', fullPage: true });
+        } catch (e) {
+          console.error('等待 Google Maps 自動完成結果時發生錯誤：', e);
+          await page.screenshot({ path: 'error_google_result.png', fullPage: true });
+          throw e;
+        }
+
+        // 點擊別的地方，確認地址
+        await page.click('.location:nth-child(1) > label');
+        await wait(2000);
+        await page.screenshot({ path: 'after_confirm_address.png', fullPage: true });
+
+        // 選擇下車地點
+        console.log('選擇下車地點...');
+        await page.evaluate(() => {
+          const select = document.querySelector('select#getOff_location');
+          if (select) {
+            select.value = '0';  // 設定為住家
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+        await wait(2000);
+        await page.screenshot({ path: 'after_select_dropoff.png', fullPage: true });
+
+        // 選擇下車地址
+        console.log('選擇下車地址...');
+        await page.evaluate(() => {
+          const select = document.querySelector('select#getOff_address');
+          if (select) {
+            const options = Array.from(select.options);
+            const targetOption = options.find(opt => opt.text.includes('新北市板橋區中正路1巷18號'));
+            if (targetOption) {
+              select.value = targetOption.value;
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              select.dispatchEvent(new Event('input', { bubbles: true }));
             }
+          }
+        });
+        await wait(2000);
+        await page.screenshot({ path: 'after_select_address.png', fullPage: true });
+
+        // 選擇預約日期和時間
+        console.log('選擇預約日期...');
+        await page.evaluate(() => {
+          const select = document.querySelector('select#appointment_date');
+          if (select) {
+            const options = Array.from(select.options);
+            const lastOption = options[options.length - 1];
+            select.value = lastOption.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+        await wait(2000);
+        await page.screenshot({ path: 'after_select_date.png', fullPage: true });
+
+        console.log('選擇預約時間...');
+        await page.evaluate(() => {
+          const hourSelect = document.querySelector('select#appointment_hour');
+          const minuteSelect = document.querySelector('select#appointment_minutes');
+          if (hourSelect) {
+            hourSelect.value = '16';
+            hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            hourSelect.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          if (minuteSelect) {
+            minuteSelect.value = '40';
+            minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            minuteSelect.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+        await wait(2000);
+        await page.screenshot({ path: 'after_select_time.png', fullPage: true });
+
+        // 選擇其他選項
+        await page.click('.form_item:nth-child(6) .cus_checkbox_type1:nth-child(2) > div');  // 不同意30分
+        await page.select('select#accompany_label', '1');  // 陪同1人
+        await page.click('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div');  // 共乘否
+        await page.click('.form_item:nth-child(11) .cus_checkbox_type1:nth-child(1) > div');  // 搭輪椅上車是
+        await page.click('.form_item:nth-child(12) .cus_checkbox_type1:nth-child(2) > div');  // 大型輪椅否
+        await wait(2000);
+        await page.screenshot({ path: 'after_select_options.png', fullPage: true });
+
+        // 點擊下一步
+        await page.click('.page_bottom > .button');
+        await wait(5000);  // 增加等待時間到 5 秒
+        await page.screenshot({ path: 'after_click_next.png', fullPage: true });
+
+        // 等待頁面載入完成
+        await page.waitForFunction(
+          () => {
+            // 檢查頁面是否還在載入中
+            const loadingIndicator = document.querySelector('.loading');
+            if (loadingIndicator) return false;
+            
+            // 檢查送出按鈕是否存在且可點擊
+            const button = document.querySelector('button.button-fill:nth-child(2)');
+            if (!button) return false;
+            
+            const style = window.getComputedStyle(button);
+            return style.display !== 'none' && 
+                   style.visibility !== 'hidden' && 
+                   style.opacity !== '0' &&
+                   !button.disabled;
+          },
+          { timeout: 30000 }  // 等待最多 30 秒
+        );
+
+        // 再次確認按鈕狀態
+        const buttonState = await page.evaluate(() => {
+            const button = document.querySelector('button.button-fill:nth-child(2)');
+            if (!button) return { exists: false };
+            
+            const style = window.getComputedStyle(button);
+            return {
+                exists: true,
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
+                disabled: button.disabled,
+                text: button.textContent.trim()
+            };
         });
 
-        // 4. 預約流程
-        console.log('開始預約流程...');
-        await retry(async () => {
-            // 點擊「新增預約」按鈕
-            console.log('點擊「新增預約」按鈕...');
-            const addReservationButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
-            if (!addReservationButton) {
-                throw new Error('找不到「新增預約」按鈕');
+        console.log('送出按鈕狀態：', buttonState);
+
+        if (!buttonState.exists || buttonState.disabled) {
+            throw new Error('送出按鈕不可用');
+        }
+
+        // 點擊送出預約
+        await page.click('button.button-fill:nth-child(2)');
+        await wait(5000);  // 增加等待時間到 5 秒
+        await page.screenshot({ path: 'after_submit.png', fullPage: true });
+
+        // 檢查預約結果
+        console.log('檢查預約結果...');
+        
+        // 等待並檢查預約結果
+        const bookingResult = await page.waitForFunction(
+          () => {
+            const dialog = document.querySelector('.dialog');
+            if (!dialog) return false;
+            const dialogText = dialog.textContent;
+            return dialogText.includes('已完成預約') || 
+                   dialogText.includes('預約成功') || 
+                   dialogText.includes('預約完成') || 
+                   dialogText.includes('預約已成功') ||
+                   dialogText.includes('預約重複');
+          },
+          { timeout: 60000 }  // 增加等待時間到 60 秒
+        );
+        
+        if (bookingResult) {
+          console.log('恭喜預約成功！');
+          await page.screenshot({ path: 'booking_success.png', fullPage: true });
+          
+          // 嘗試點擊確認按鈕
+          try {
+            const confirmButton = await page.waitForSelector('.dialog-button', { timeout: 5000 });
+            if (confirmButton) {
+              await confirmButton.click();
             }
-            await addReservationButton.click();
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // 選擇上車地點
-            console.log('選擇上車地點...');
-            await page.select('select[name="pickupType"]', '醫療院所');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 輸入並選擇醫院
-            console.log('輸入醫院名稱...');
-            await page.type('input[name="pickupLocation"]', '亞東紀念醫院', { delay: 100 });
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // 點擊第一個搜尋結果
-            const firstResult = await page.waitForSelector('.pac-item', { visible: true });
-            if (!firstResult) {
-                throw new Error('找不到醫院搜尋結果');
-            }
-            await firstResult.click();
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // 選擇下車地點
-            console.log('選擇下車地點...');
-            await page.select('select[name="dropoffType"]', '住家');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // 選擇預約日期和時間
-            console.log('選擇預約日期和時間...');
-            const dateSelect = await page.$('select[name="date"]');
-            const dateOptions = await dateSelect.$$('option');
-            await dateOptions[dateOptions.length - 1].click();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            await page.select('select[name="hour"]', '16');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await page.select('select[name="minute"]', '40');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // 選擇其他選項
-            console.log('選擇其他選項...');
-            await page.select('select[name="arrivalTime"]', '不同意');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await page.select('select[name="companions"]', '1人(免費)');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await page.select('select[name="sharing"]', '否');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await page.select('select[name="wheelchair"]', '是');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await page.select('select[name="largeWheelchair"]', '否');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // 點擊下一步按鈕
-            console.log('點擊下一步按鈕...');
-            const nextButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
-            if (!nextButton) {
-                throw new Error('找不到下一步按鈕');
-            }
-            await nextButton.click();
-            await new Promise(resolve => setTimeout(resolve, 3000));
-
-            // 點擊送出預約按鈕
-            console.log('點擊送出預約按鈕...');
-            const submitButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
-            if (!submitButton) {
-                throw new Error('找不到送出預約按鈕');
-            }
-            await submitButton.click();
-            await new Promise(resolve => setTimeout(resolve, 3000));
-
-            // 確認預約完成
-            const successMessage = await page.evaluate(() => {
-                const dialogText = document.querySelector('div.dialog-text');
-                return dialogText ? dialogText.textContent : null;
-            });
-
-            if (!successMessage || !successMessage.includes('已完成預約')) {
-                throw new Error('無法確認預約是否成功');
-            }
-        });
-
-        console.log('預約成功完成！');
-
+          } catch (error) {
+            console.log('找不到確認按鈕，繼續執行...');
+          }
+        } else {
+          console.log('預約可能失敗');
+          await page.screenshot({ path: 'booking_failed.png', fullPage: true });
+        }
     } catch (error) {
-        console.error('預約過程發生錯誤：', error);
+        console.error('發生錯誤：', error);
+        if (browser) {
+            await browser.close();
+        }
         throw error;
     } finally {
-        await browser.close();
+        if (browser) {
+            await browser.close();
+        }
     }
 } 
