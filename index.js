@@ -331,39 +331,35 @@ async function bookCar() {
                 });
                 
                 if (!isBookingPage) {
-                    console.log('不在預約頁面，嘗試點擊其他按鈕...');
-                    // 嘗試點擊其他可能的按鈕
-                    const buttons = await page.$$('a.button-fill');
-                    for (const button of buttons) {
-                        const text = await page.evaluate(el => el.textContent.trim(), button);
-                        console.log('找到按鈕：', text);
-                        if (text && text !== '民眾登入') {
-                            await button.click();
-                            console.log('已點擊按鈕：', text);
-                            
-                            // 等待頁面導航完成
-                            await page.waitForNavigation({ 
-                                waitUntil: 'networkidle0',
-                                timeout: 30000 
-                            }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
-                            
-                            // 等待一段時間讓頁面完全載入
-                            await page.waitForTimeout(5000);
-                            
-                            // 再次檢查是否在預約頁面
-                            const isBookingPage = await page.evaluate(() => {
-                                return document.querySelector('#pickUp_location') !== null ||
-                                       document.querySelector('select[name="pickUp_location"]') !== null ||
-                                       document.querySelector('input[name="pickUp_location"]') !== null;
-                            });
-                            
-                            if (isBookingPage) {
-                                console.log('成功進入預約頁面！');
-                                return;
-                            }
-                            
-                            break;
+                    console.log('不在預約頁面，嘗試點擊民眾登入按鈕...');
+                    // 嘗試點擊民眾登入按鈕
+                    const loginButton = await page.$('a.link.panel-close.user_login');
+                    if (loginButton) {
+                        await loginButton.click();
+                        console.log('已點擊民眾登入按鈕！');
+                        
+                        // 等待頁面導航完成
+                        await page.waitForNavigation({ 
+                            waitUntil: 'networkidle0',
+                            timeout: 30000 
+                        }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                        
+                        // 等待一段時間讓頁面完全載入
+                        await page.waitForTimeout(5000);
+                        
+                        // 再次檢查是否在預約頁面
+                        const isBookingPage = await page.evaluate(() => {
+                            return document.querySelector('#pickUp_location') !== null ||
+                                   document.querySelector('select[name="pickUp_location"]') !== null ||
+                                   document.querySelector('input[name="pickUp_location"]') !== null;
+                        });
+                        
+                        if (isBookingPage) {
+                            console.log('成功進入預約頁面！');
+                            return;
                         }
+                    } else {
+                        console.log('找不到民眾登入按鈕');
                     }
                 }
                 
