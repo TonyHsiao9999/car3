@@ -123,28 +123,41 @@ async function bookCar() {
             
             // 尋找並點擊「我知道了」按鈕
             const dialogResult = await page.evaluate(() => {
-                // 先找到對話框
-                const dialog = document.querySelector('.dialog-text');
-                if (!dialog) {
-                    return { found: false, message: '找不到對話框' };
+                // 印出所有可能的對話框元素
+                const possibleDialogs = document.querySelectorAll('.dialog-text, .dialog, .modal, .modal-text');
+                console.log('找到的對話框數量：', possibleDialogs.length);
+                
+                // 找到包含「我知道了」文字的按鈕
+                const buttons = Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'));
+                const buttonWithText = buttons.find(btn => btn.textContent.trim() === '我知道了');
+                
+                if (buttonWithText) {
+                    console.log('找到按鈕：', buttonWithText.outerHTML);
+                    buttonWithText.click();
+                    return { found: true };
                 }
                 
-                // 在對話框中找「我知道了」按鈕
-                const dialogButton = document.querySelector('.dialog-button');
-                if (!dialogButton) {
-                    return { found: false, message: '找不到對話框按鈕' };
-                }
+                // 如果找不到，印出所有按鈕的文字和 HTML
+                const buttonTexts = buttons.map(btn => ({
+                    text: btn.textContent.trim(),
+                    html: btn.outerHTML
+                }));
                 
-                // 點擊按鈕
-                dialogButton.click();
-                return { found: true };
+                return {
+                    found: false,
+                    message: '找不到「我知道了」按鈕',
+                    buttons: buttonTexts
+                };
             });
             
             if (!dialogResult.found) {
                 // 如果找不到按鈕，截圖當前畫面以便檢查
                 await page.screenshot({ path: 'dialog_not_found.png', fullPage: true });
                 console.log('錯誤原因：', dialogResult.message);
-                throw new Error('找不到對話框或按鈕');
+                if (dialogResult.buttons) {
+                    console.log('頁面上的按鈕：', dialogResult.buttons);
+                }
+                throw new Error('找不到「我知道了」按鈕');
             }
             
             // 等待按鈕點擊後的效果
