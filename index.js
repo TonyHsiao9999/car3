@@ -73,7 +73,24 @@ async function bookCar() {
             '--no-experiments',
             '--no-pings',
             '--no-zygote',
-            '--single-process'
+            '--single-process',
+            '--disable-background-networking',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-component-update',
+            '--disable-domain-reliability',
+            '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
+            '--disable-hang-monitor',
+            '--disable-ipc-flooding-protection',
+            '--disable-notifications',
+            '--disable-renderer-backgrounding',
+            '--disable-sync',
+            '--force-color-profile=srgb',
+            '--metrics-recording-only',
+            '--password-store=basic',
+            '--use-mock-keychain'
         ],
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         ignoreHTTPSErrors: true,
@@ -95,6 +112,19 @@ async function bookCar() {
 
         // 設定使用者代理
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // 設定額外的請求頭
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1'
+        });
 
         // 監聽頁面錯誤
         page.on('error', err => {
@@ -137,6 +167,26 @@ async function bookCar() {
                     clearWatch: () => {}
                 })
             });
+        });
+
+        // 注入額外的 JavaScript 來模擬真實瀏覽器環境
+        await page.evaluateOnNewDocument(() => {
+            // 模擬 WebGL
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                if (parameter === 37445) {
+                    return 'Intel Inc.';
+                }
+                if (parameter === 37446) {
+                    return 'Intel Iris OpenGL Engine';
+                }
+                return getParameter.apply(this, arguments);
+            };
+
+            // 模擬 navigator 屬性
+            Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-TW', 'zh', 'en-US', 'en'] });
         });
 
         console.log('正在開啟網頁...');
