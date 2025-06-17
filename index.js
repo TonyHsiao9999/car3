@@ -135,42 +135,32 @@ async function bookCar() {
 
         // 設定瀏覽器環境
         await page.evaluateOnNewDocument(() => {
+          // 設定基本環境
+          const env = {
+            language: 'zh-TW',
+            timeZone: 'Asia/Taipei',
+            screenWidth: 1920,
+            screenHeight: 1080
+          };
+
           // 設定時區
-          Object.defineProperty(Intl, 'DateTimeFormat', {
-            value: function(...args) {
-              if (args.length === 0) {
-                args = [undefined, { timeZone: 'Asia/Taipei' }];
-              }
-              return new Intl.DateTimeFormat(...args);
-            },
-            writable: true,
-            configurable: true
-          });
+          if (!Intl._original_DateTimeFormat) {
+            Intl._original_DateTimeFormat = Intl.DateTimeFormat;
+          }
+          Intl.DateTimeFormat = function(...args) {
+            if (args.length === 0) {
+              args = [undefined, { timeZone: env.timeZone }];
+            }
+            return new Intl._original_DateTimeFormat(...args);
+          };
 
           // 設定語言
-          Object.defineProperty(navigator, 'language', {
-            get: function() {
-              return 'zh-TW';
-            }
-          });
-
-          Object.defineProperty(navigator, 'languages', {
-            get: function() {
-              return ['zh-TW', 'zh'];
-            }
-          });
+          Object.defineProperty(navigator, 'language', { get: () => env.language });
+          Object.defineProperty(navigator, 'languages', { get: () => [env.language, 'zh'] });
 
           // 設定螢幕大小
-          Object.defineProperty(window.screen, 'width', {
-            get: function() {
-              return 1920;
-            }
-          });
-          Object.defineProperty(window.screen, 'height', {
-            get: function() {
-              return 1080;
-            }
-          });
+          Object.defineProperty(window.screen, 'width', { get: () => env.screenWidth });
+          Object.defineProperty(window.screen, 'height', { get: () => env.screenHeight });
         });
 
         // 監聽錯誤
@@ -524,39 +514,46 @@ async function bookCar() {
         console.error('系統偵錯資訊：', JSON.stringify(debugInfo, null, 2));
         console.error('=== 系統資訊結束 ===');
 
-        // 改進按鈕選擇邏輯
+        // 改進按鈕選擇邏輯，使用更輕量的方式
         console.error('等待送出按鈕出現...');
-        await page.waitForFunction(
-          () => {
-            const buttons = Array.from(document.querySelectorAll('button'));
-            const submitButton = buttons.find(btn => 
-              btn.textContent.includes('送出預約') || 
-              btn.textContent.includes('送出') ||
-              btn.className.includes('button-fill')
-            );
-            console.error('找到的按鈕：', submitButton ? {
-              text: submitButton.textContent,
-              class: submitButton.className,
-              type: submitButton.type,
-              disabled: submitButton.disabled
-            } : '沒有找到按鈕');
-            return submitButton;
-          },
-          { timeout: 30000 }
-        );
+        const buttonInfo = await page.evaluate(() => {
+          const findButton = () => {
+            const buttons = document.querySelectorAll('button');
+            for (const btn of buttons) {
+              if (btn.textContent.includes('送出預約') || 
+                  btn.textContent.includes('送出') ||
+                  btn.className.includes('button-fill')) {
+                return {
+                  found: true,
+                  text: btn.textContent,
+                  class: btn.className,
+                  type: btn.type,
+                  disabled: btn.disabled
+                };
+              }
+            }
+            return { found: false };
+          };
+
+          const result = findButton();
+          console.error('按鈕狀態：', result);
+          return result;
+        });
+
+        if (!buttonInfo.found) {
+          throw new Error('找不到送出按鈕');
+        }
 
         // 點擊送出按鈕
         await page.evaluate(() => {
-          const buttons = Array.from(document.querySelectorAll('button'));
-          const submitButton = buttons.find(btn => 
-            btn.textContent.includes('送出預約') || 
-            btn.textContent.includes('送出') ||
-            btn.className.includes('button-fill')
-          );
-          if (submitButton) {
-            submitButton.click();
-          } else {
-            throw new Error('找不到送出按鈕');
+          const buttons = document.querySelectorAll('button');
+          for (const btn of buttons) {
+            if (btn.textContent.includes('送出預約') || 
+                btn.textContent.includes('送出') ||
+                btn.className.includes('button-fill')) {
+              btn.click();
+              return;
+            }
           }
         });
 
