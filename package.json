@@ -1,15 +1,15 @@
 {
-  "name": "car-booking-automation",
+  "name": "car3",
   "version": "1.0.0",
-  "description": "長照訂車自動化腳本",
+  "description": "新北市長照交通接送預約自動化",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "puppeteer": "^21.0.0",
-    "dotenv": "^16.0.0",
-    "node-cron": "^3.0.0"
+    "node-cron": "^3.0.0",
+    "dotenv": "^16.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

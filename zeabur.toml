@@ -1,0 +1,13 @@
+[project]
+name = "car3"
+type = "node"
+
+[deploy]
+startCommand = "node index.js"
+healthCheckPath = "/"
+healthCheckTimeout = 300
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_VERSION = "18" 
