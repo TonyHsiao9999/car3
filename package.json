@@ -1,18 +1,19 @@
 {
   "name": "car3",
   "version": "1.0.0",
-  "description": "新北市長照交通接送預約自動化",
+  "description": "長照訂車自動化程式",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "puppeteer": "^21.0.0",
-    "node-cron": "^3.0.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "puppeteer": "^22.3.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "buildpacks": [
     {

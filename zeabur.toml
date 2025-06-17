@@ -10,4 +10,5 @@ restartPolicyType = "always"
 restartPolicyMaxRetries = 10
 
 [env]
-NODE_VERSION = "18" 
+NODE_VERSION = "22"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true" 
