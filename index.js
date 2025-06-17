@@ -121,9 +121,52 @@ async function bookCar() {
 
         // 填入登入表單
         console.log('填入登入表單...\n');
-        await page.type('input[name="IDNumber"]', ID_NUMBER);
-        await page.type('input[name="password"]', PASSWORD);
+        await page.type('input[name="IDNumber"]', process.env.USER_ID);
+        await page.type('input[name="password"]', process.env.USER_PASSWORD);
         await page.waitForTimeout(1000);
+
+        // 確認帳號密碼是否確實填入
+        const idNumberValue = await page.evaluate(() => {
+            const input = document.querySelector('input[name="IDNumber"]');
+            return input ? input.value : '';
+        });
+        const passwordValue = await page.evaluate(() => {
+            const input = document.querySelector('input[name="password"]');
+            return input ? input.value : '';
+        });
+
+        if (idNumberValue !== process.env.USER_ID || passwordValue !== process.env.USER_PASSWORD) {
+            console.log('帳號密碼未正確填入，重試中...\n');
+            // 清空輸入框
+            await page.evaluate(() => {
+                const idInput = document.querySelector('input[name="IDNumber"]');
+                const pwdInput = document.querySelector('input[name="password"]');
+                if (idInput) idInput.value = '';
+                if (pwdInput) pwdInput.value = '';
+            });
+            await page.waitForTimeout(1000);
+
+            // 重新填入
+            await page.type('input[name="IDNumber"]', process.env.USER_ID);
+            await page.type('input[name="password"]', process.env.USER_PASSWORD);
+            await page.waitForTimeout(1000);
+
+            // 再次確認
+            const retryIdNumberValue = await page.evaluate(() => {
+                const input = document.querySelector('input[name="IDNumber"]');
+                return input ? input.value : '';
+            });
+            const retryPasswordValue = await page.evaluate(() => {
+                const input = document.querySelector('input[name="password"]');
+                return input ? input.value : '';
+            });
+
+            if (retryIdNumberValue !== process.env.USER_ID || retryPasswordValue !== process.env.USER_PASSWORD) {
+                throw new Error('無法正確填入帳號密碼');
+            }
+        }
+
+        console.log('帳號密碼已確認填入！\n');
 
         // 點擊民眾登入按鈕
         console.log('點擊表單內的「民眾登入」按鈕...\n');
