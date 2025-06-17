@@ -304,9 +304,12 @@ async function bookCar() {
 
               // 等待頁面導航
               console.log('等待頁面導航...\n');
-              await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+              try {
+                await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+                console.log('頁面導航完成！\n');
+              } catch (error) {
                 console.log('等待頁面導航超時，繼續執行...\n');
-              });
+              }
 
               // 檢查是否成功進入預約頁面
               const isBookingPage = await page.evaluate(() => {
@@ -315,6 +318,35 @@ async function bookCar() {
 
               if (isBookingPage) {
                 console.log('成功進入預約頁面！\n');
+                break;
+              }
+
+              // 如果還沒進入預約頁面，等待更長時間
+              console.log('尚未進入預約頁面，等待更長時間...\n');
+              await page.waitForTimeout(10000);
+
+              // 再次檢查
+              const isBookingPageRetry = await page.evaluate(() => {
+                return window.location.href.includes('/ntpc/booking');
+              });
+
+              if (isBookingPageRetry) {
+                console.log('成功進入預約頁面！\n');
+                break;
+              }
+
+              // 如果還是沒進入預約頁面，嘗試重新整理
+              console.log('嘗試重新整理頁面...\n');
+              await page.reload({ waitUntil: 'networkidle0' });
+              await page.waitForTimeout(5000);
+
+              // 最後一次檢查
+              const isBookingPageFinal = await page.evaluate(() => {
+                return window.location.href.includes('/ntpc/booking');
+              });
+
+              if (isBookingPageFinal) {
+                console.log('重新整理後成功進入預約頁面！\n');
                 break;
               }
             }
