@@ -1,8 +1,5 @@
 const puppeteer = require('puppeteer');
-const chromium = require('chrome-aws-lambda');
 const cron = require('node-cron');
-
-// 載入環境變數
 require('dotenv').config();
 
 // 檢查必要的環境變數
@@ -14,6 +11,26 @@ if (!process.env.CAR_BOOKING_ID || !process.env.CAR_BOOKING_PASSWORD) {
 // 將環境變數轉換為字串
 const ID_NUMBER = String(process.env.CAR_BOOKING_ID);
 const PASSWORD = String(process.env.CAR_BOOKING_PASSWORD);
+
+// 設定排程任務
+console.log('設定排程任務...');
+cron.schedule('0 0 * * 1,4', async () => {
+    console.log('開始執行預約任務...');
+    try {
+        await bookCar();
+    } catch (error) {
+        console.error('排程任務執行失敗：', error);
+    }
+});
+
+// 如果直接執行腳本，立即執行一次
+if (require.main === module) {
+    console.log('立即執行預約任務...');
+    bookCar().catch(error => {
+        console.error('立即執行失敗：', error);
+        process.exit(1);
+    });
+}
 
 async function bookCar() {
     console.log('開始執行預約流程...');
@@ -448,24 +465,4 @@ async function bookCar() {
         // 不要關閉瀏覽器，讓使用者可以看到結果
         // await browser.close();
     }
-}
-
-// 設定排程任務
-console.log('設定排程任務...');
-cron.schedule('0 0 * * 1,4', async () => {
-    console.log('開始執行預約任務...');
-    try {
-        await bookCar();
-    } catch (error) {
-        console.error('排程任務執行失敗：', error);
-    }
-});
-
-// 如果直接執行腳本，立即執行一次
-if (require.main === module) {
-    console.log('立即執行預約任務...');
-    bookCar().catch(error => {
-        console.error('立即執行失敗：', error);
-        process.exit(1);
-    });
 } 
