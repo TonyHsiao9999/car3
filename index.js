@@ -168,15 +168,65 @@ async function bookCar() {
         // 點擊登入按鈕
         console.log('點擊登入按鈕...');
         await retry(async () => {
-            const loginButton = await page.waitForSelector('a.link:nth-child(2)', { 
-                timeout: 60000,
-                visible: true 
-            });
+            // 先列出所有按鈕和連結
+            const buttons = await page.$$('button, a');
+            console.log('找到按鈕和連結數量：', buttons.length);
             
-            if (loginButton) {
-                await loginButton.click();
-                console.log('已點擊登入按鈕');
-            } else {
+            for (const button of buttons) {
+                const text = await page.evaluate(el => el.textContent.trim(), button);
+                const href = await page.evaluate(el => el.href, button);
+                const className = await page.evaluate(el => el.className, button);
+                console.log('按鈕/連結文字：', text);
+                console.log('按鈕/連結 href：', href);
+                console.log('按鈕/連結 class：', className);
+            }
+
+            // 嘗試多個可能的選擇器
+            const selectors = [
+                'a.link:nth-child(2)',
+                'a.button-fill:nth-child(2)',
+                'a[href*="login"]',
+                'button[type="submit"]',
+                'input[type="submit"]',
+                'button:contains("登入")',
+                'a:contains("登入")'
+            ];
+
+            for (const selector of selectors) {
+                try {
+                    console.log('嘗試選擇器：', selector);
+                    const button = await page.waitForSelector(selector, { 
+                        timeout: 5000,
+                        visible: true 
+                    });
+                    
+                    if (button) {
+                        console.log('找到按鈕，使用選擇器：', selector);
+                        await button.click();
+                        console.log('已點擊登入按鈕');
+                        return;
+                    }
+                } catch (error) {
+                    console.log('選擇器無效：', selector);
+                }
+            }
+
+            // 如果上述選擇器都失敗，嘗試用文字內容尋找
+            const loginButton = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('button, a, input[type="submit"]'));
+                const loginButton = buttons.find(btn => 
+                    btn.textContent.includes('登入') || 
+                    btn.value?.includes('登入') ||
+                    btn.innerText?.includes('登入')
+                );
+                if (loginButton) {
+                    loginButton.click();
+                    return true;
+                }
+                return false;
+            });
+
+            if (!loginButton) {
                 throw new Error('找不到登入按鈕');
             }
         });
