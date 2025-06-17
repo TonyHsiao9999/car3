@@ -191,22 +191,60 @@ async function bookCar() {
 
         console.log('正在開啟網頁...');
         await retry(async () => {
+            // 先訪問主頁
+            await page.goto('https://www.taiwantaxi.com.tw', {
+                waitUntil: 'networkidle0',
+                timeout: 60000
+            });
+            
+            // 等待一下確保頁面完全載入
+            await page.waitForTimeout(5000);
+            
+            // 然後再訪問登入頁面
             await page.goto('https://www.taiwantaxi.com.tw/memberLogin.aspx', {
                 waitUntil: 'networkidle0',
                 timeout: 60000
             });
+            
+            // 檢查頁面是否正確載入
+            const pageTitle = await page.title();
+            console.log('頁面標題：', pageTitle);
+            
+            if (!pageTitle.includes('會員登入')) {
+                throw new Error('頁面載入不正確');
+            }
         });
 
         // 等待頁面完全載入
         console.log('等待頁面載入完成...');
         await page.waitForTimeout(5000);
 
+        // 檢查頁面內容
+        const pageContent = await page.content();
+        if (!pageContent.includes('會員登入')) {
+            throw new Error('頁面內容不正確');
+        }
+
         // 嘗試點擊「我知道了」按鈕
         console.log('嘗試點擊「我知道了」按鈕...');
         try {
             await retry(async () => {
-                const button = await page.waitForSelector('button.btn-primary', { timeout: 5000 });
+                // 等待按鈕出現
+                const button = await page.waitForSelector('button.btn-primary, span.dialog-button', { 
+                    timeout: 5000,
+                    visible: true 
+                });
+                
                 if (button) {
+                    // 確保按鈕可見
+                    await button.evaluate(btn => {
+                        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                    
+                    // 等待一下確保按鈕完全可見
+                    await page.waitForTimeout(1000);
+                    
+                    // 點擊按鈕
                     await button.click();
                     console.log('已點擊「我知道了」按鈕！');
                 }
@@ -219,25 +257,91 @@ async function bookCar() {
         console.log('等待頁面載入完成...');
         await page.waitForTimeout(5000);
 
+        // 檢查登入表單是否存在
+        const loginForm = await page.$('form[name="aspnetForm"]');
+        if (!loginForm) {
+            throw new Error('找不到登入表單');
+        }
+
         // 輸入身分證字號
         console.log('輸入身分證字號...');
         await retry(async () => {
-            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtID"]', { timeout: 60000 });
-            await page.type('input[name="ctl00$ContentPlaceHolder1$txtID"]', ID_NUMBER, { delay: 100 });
+            const idInput = await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtID"]', { 
+                timeout: 60000,
+                visible: true 
+            });
+            
+            if (idInput) {
+                // 確保輸入框可見
+                await idInput.evaluate(input => {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+                
+                // 等待一下確保輸入框完全可見
+                await page.waitForTimeout(1000);
+                
+                // 清空輸入框
+                await idInput.evaluate(input => input.value = '');
+                
+                // 輸入身分證字號
+                await idInput.type(ID_NUMBER, { delay: 100 });
+                console.log('已輸入身分證字號');
+            } else {
+                throw new Error('找不到身分證字號輸入框');
+            }
         });
 
         // 輸入密碼
         console.log('輸入密碼...');
         await retry(async () => {
-            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtPassword"]', { timeout: 60000 });
-            await page.type('input[name="ctl00$ContentPlaceHolder1$txtPassword"]', PASSWORD, { delay: 100 });
+            const passwordInput = await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$txtPassword"]', { 
+                timeout: 60000,
+                visible: true 
+            });
+            
+            if (passwordInput) {
+                // 確保輸入框可見
+                await passwordInput.evaluate(input => {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+                
+                // 等待一下確保輸入框完全可見
+                await page.waitForTimeout(1000);
+                
+                // 清空輸入框
+                await passwordInput.evaluate(input => input.value = '');
+                
+                // 輸入密碼
+                await passwordInput.type(PASSWORD, { delay: 100 });
+                console.log('已輸入密碼');
+            } else {
+                throw new Error('找不到密碼輸入框');
+            }
         });
 
         // 點擊登入按鈕
         console.log('點擊登入按鈕...');
         await retry(async () => {
-            await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$btnLogin"]', { timeout: 60000 });
-            await page.click('input[name="ctl00$ContentPlaceHolder1$btnLogin"]');
+            const loginButton = await page.waitForSelector('input[name="ctl00$ContentPlaceHolder1$btnLogin"]', { 
+                timeout: 60000,
+                visible: true 
+            });
+            
+            if (loginButton) {
+                // 確保按鈕可見
+                await loginButton.evaluate(button => {
+                    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+                
+                // 等待一下確保按鈕完全可見
+                await page.waitForTimeout(1000);
+                
+                // 點擊按鈕
+                await loginButton.click();
+                console.log('已點擊登入按鈕');
+            } else {
+                throw new Error('找不到登入按鈕');
+            }
         });
 
         // 等待登入成功
