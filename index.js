@@ -320,6 +320,9 @@ async function bookCar() {
                     timeout: 30000 
                 }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
                 
+                // 等待一段時間讓頁面完全載入
+                await page.waitForTimeout(5000);
+                
                 // 檢查是否在預約頁面
                 const isBookingPage = await page.evaluate(() => {
                     return document.querySelector('#pickUp_location') !== null ||
@@ -337,10 +340,28 @@ async function bookCar() {
                         if (text && text !== '民眾登入') {
                             await button.click();
                             console.log('已點擊按鈕：', text);
+                            
+                            // 等待頁面導航完成
                             await page.waitForNavigation({ 
                                 waitUntil: 'networkidle0',
                                 timeout: 30000 
                             }).catch(() => console.log('等待頁面導航超時，繼續執行...'));
+                            
+                            // 等待一段時間讓頁面完全載入
+                            await page.waitForTimeout(5000);
+                            
+                            // 再次檢查是否在預約頁面
+                            const isBookingPage = await page.evaluate(() => {
+                                return document.querySelector('#pickUp_location') !== null ||
+                                       document.querySelector('select[name="pickUp_location"]') !== null ||
+                                       document.querySelector('input[name="pickUp_location"]') !== null;
+                            });
+                            
+                            if (isBookingPage) {
+                                console.log('成功進入預約頁面！');
+                                return;
+                            }
+                            
                             break;
                         }
                     }
@@ -364,7 +385,21 @@ async function bookCar() {
         });
         
         if (!isBookingPage) {
-            throw new Error('無法進入預約頁面');
+            // 如果不在預約頁面，嘗試重新整理頁面
+            console.log('不在預約頁面，嘗試重新整理頁面...');
+            await page.reload({ waitUntil: 'networkidle0' });
+            await page.waitForTimeout(5000);
+            
+            // 再次檢查是否在預約頁面
+            const isBookingPageAfterReload = await page.evaluate(() => {
+                return document.querySelector('#pickUp_location') !== null ||
+                       document.querySelector('select[name="pickUp_location"]') !== null ||
+                       document.querySelector('input[name="pickUp_location"]') !== null;
+            });
+            
+            if (!isBookingPageAfterReload) {
+                throw new Error('無法進入預約頁面');
+            }
         }
 
         // 選擇上車地點
