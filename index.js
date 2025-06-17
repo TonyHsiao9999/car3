@@ -466,6 +466,31 @@ async function bookCar() {
         );
         console.log('所有包含「登入成功」的元素：', successElements);
 
+        // 等待所有 dialog-button 出現
+        await page.waitForSelector('span.dialog-button', { timeout: 10000 });
+
+        // 列出所有 dialog-button 的文字
+        const dialogButtons = await page.$$eval('span.dialog-button', btns =>
+          btns.map(btn => btn.textContent.trim())
+        );
+        console.log('所有 dialog-button 文字：', dialogButtons);
+
+        // 嘗試點擊「確定」按鈕
+        const dialogButtonHandles = await page.$$('span.dialog-button');
+        let clicked = false;
+        for (const btn of dialogButtonHandles) {
+          const text = await (await btn.getProperty('textContent')).jsonValue();
+          if (text.trim() === '確定') {
+            await btn.click();
+            console.log('已點擊確定按鈕');
+            clicked = true;
+            break;
+          }
+        }
+        if (!clicked) {
+          console.log('沒有找到「確定」按鈕');
+        }
+
     } catch (error) {
         console.error('預約過程發生錯誤：', error);
         throw error;
