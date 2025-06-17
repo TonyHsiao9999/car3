@@ -355,6 +355,15 @@ async function bookCar() {
           if (select) {
             const options = Array.from(select.options);
             const lastOption = options[options.length - 1];
+            
+            // 記錄所有日期選項的詳細資訊
+            console.log('所有日期選項：', options.map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            })));
+            
             select.value = lastOption.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
             select.dispatchEvent(new Event('input', { bubbles: true }));
@@ -374,13 +383,31 @@ async function bookCar() {
           const hourSelect = document.querySelector('select#appointment_hour');
           const minuteSelect = document.querySelector('select#appointment_minutes');
           let hour = '', minute = '';
+
           if (hourSelect) {
+            // 記錄所有小時選項的詳細資訊
+            console.log('所有小時選項：', Array.from(hourSelect.options).map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            })));
+            
             hourSelect.value = '16';
             hour = hourSelect.value;
             hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
             hourSelect.dispatchEvent(new Event('input', { bubbles: true }));
           }
+
           if (minuteSelect) {
+            // 記錄所有分鐘選項的詳細資訊
+            console.log('所有分鐘選項：', Array.from(minuteSelect.options).map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            })));
+            
             minuteSelect.value = '40';
             minute = minuteSelect.value;
             minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -388,11 +415,13 @@ async function bookCar() {
           }
           return { hour, minute };
         });
+
         console.log('選擇的預約時間：', selectedTime);
         await wait(2000);
         await page.screenshot({ path: 'after_select_time.png', fullPage: true });
 
         // 選擇其他選項
+        console.log('選擇其他選項...');
         await page.click('.form_item:nth-child(6) .cus_checkbox_type1:nth-child(2) > div');  // 不同意30分
         await page.select('select#accompany_label', '1');  // 陪同1人
         await page.click('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div');  // 共乘否
@@ -453,125 +482,124 @@ async function bookCar() {
         console.log('已點擊送出預約按鈕');
         await wait(2000);  // 等待 2 秒
 
+        // 等待浮動視窗出現
+        console.log('等待浮動視窗出現...');
+        const dialogContent = await page.waitForFunction(
+          () => {
+            const dialog = document.querySelector('.dialog') || 
+                          document.querySelector('.el-message-box__wrapper') ||
+                          document.querySelector('.el-message-box');
+            if (dialog) {
+              return dialog.textContent;
+            }
+            return null;
+          },
+          { timeout: 30000 }
+        );
+
         // 檢查預約結果並自動點擊對話框按鈕
         console.log('檢查預約結果...');
-        console.log('預約資訊：', {
-          日期: selectedDate?.text,
-          時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
-          執行環境: process.env.NODE_ENV || 'development',
-          時間戳記: new Date().toISOString()
-        });
-        
-        try {
-          let successFound = false;
-          let retryCount = 0;
-          const maxRetries = 30;  // 最多檢查 30 次
+        const appointmentInfo = {
+          '日期': selectedDate.text,
+          '時間': `${selectedTime.hour}:${selectedTime.minute}`,
+          '執行環境': process.env.NODE_ENV || 'development',
+          '時間戳記': new Date().toISOString()
+        };
+        console.log('預約資訊：', appointmentInfo);
 
-          while (!successFound && retryCount < maxRetries) {
-            console.log(`第 ${retryCount + 1} 次檢查...`);
-            // 檢查多種常見浮動視窗
-            const dialogContent = await page.evaluate(() => {
-              // 所有常見的 dialog/modal class
-              const selectors = [
-                '.el-message-box__wrapper',
-                '.el-dialog__wrapper',
-                '.el-dialog__body',
-                '.dialog',
-                '.modal',
-                '.popup',
-                '.framework7-root .dialog',
-                '.framework7-root .popup',
-                '.framework7-root .modal',
-                '.dialog-title',
-                '.dialog-text'
-              ];
-              for (const sel of selectors) {
-                const el = document.querySelector(sel);
-                if (el && typeof el.innerText === 'string' && el.offsetParent !== null) {
-                  return { selector: sel, content: el.innerText.trim() };
-                }
-              }
-              return { selector: '', content: '' };
-            });
+        // 等待並檢查浮動視窗內容
+        let success = false;
+        let attempts = 0;
+        const maxAttempts = 5;
 
-            console.log('浮動視窗內容：', dialogContent);
-
-            // 如果是「此時段無法預約」，記錄詳細資訊
-            if (dialogContent.content.includes('此時段無法預約')) {
-              console.log('預約失敗資訊：', {
-                錯誤訊息: dialogContent.content,
-                選擇日期: selectedDate?.text,
-                選擇時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
-                執行環境: process.env.NODE_ENV || 'development',
-                時間戳記: new Date().toISOString()
-              });
-            }
-
-            if (
-              dialogContent.content.includes('已完成預約') ||
-              dialogContent.content.includes('預約成功') ||
-              dialogContent.content.includes('預約完成') ||
-              dialogContent.content.includes('預約已成功') ||
-              dialogContent.content.includes('預約重複')
-            ) {
-              console.log(`在 ${dialogContent.selector} 中找到成功訊息`);
-              console.log('預約成功資訊：', {
-                成功訊息: dialogContent.content,
-                選擇日期: selectedDate?.text,
-                選擇時間: `${selectedTime?.hour}:${selectedTime?.minute}`,
-                執行環境: process.env.NODE_ENV || 'development',
-                時間戳記: new Date().toISOString()
-              });
-              successFound = true;
-              break;
-            }
-
-            await wait(2000);
-            retryCount++;
-          }
-
-          if (!successFound) {
-            throw new Error('未找到預約成功或重複預約的訊息');
-          }
-
-          // 嘗試自動點擊 dialog 內的按鈕
-          const buttonClicked = await page.evaluate(() => {
-            // 常見的 dialog/popup/modal 按鈕
-            const btnSelectors = [
-              '.el-message-box__btns .el-button--primary',
-              '.el-dialog__footer .el-button--primary',
-              '.dialog-buttons .button',
-              '.dialog-buttons .dialog-button',
-              '.popup .button',
-              '.modal .button',
-              '.actions .button'
-            ];
-            for (const sel of btnSelectors) {
-              const btn = document.querySelector(sel);
-              if (btn) {
-                btn.click();
-                return sel;
-              }
+        while (!success && attempts < maxAttempts) {
+          attempts++;
+          console.log(`第 ${attempts} 次檢查...`);
+          
+          const dialogResult = await page.evaluate(() => {
+            const dialog = document.querySelector('.dialog') || 
+                          document.querySelector('.el-message-box__wrapper') ||
+                          document.querySelector('.el-message-box');
+            if (dialog) {
+              return {
+                selector: dialog.className,
+                content: dialog.textContent
+              };
             }
             return null;
           });
-          if (buttonClicked) {
-            console.log('已自動點擊按鈕：', buttonClicked);
-            await wait(2000);
-          } else {
-            console.log('未找到可自動點擊的按鈕');
+
+          if (dialogResult) {
+            console.log('浮動視窗內容：', dialogResult);
+            
+            if (dialogResult.content.includes('已完成預約')) {
+              console.log(`在 ${dialogResult.selector} 中找到成功訊息`);
+              success = true;
+              
+              // 記錄成功資訊
+              const successInfo = {
+                '成功訊息': dialogResult.content,
+                '日期': selectedDate.text,
+                '時間': `${selectedTime.hour}:${selectedTime.minute}`,
+                '執行環境': process.env.NODE_ENV || 'development',
+                '時間戳記': new Date().toISOString()
+              };
+              console.log('預約成功資訊：', successInfo);
+              
+              // 等待頁面更新完成
+              await wait(5000);
+              
+              // 截取成功畫面
+              await page.screenshot({ 
+                path: 'success.png', 
+                fullPage: true 
+              });
+              
+              // 點擊關閉按鈕
+              await page.evaluate(() => {
+                const closeButton = document.querySelector('.dialog .button') ||
+                                  document.querySelector('.el-message-box__btns .el-button');
+                if (closeButton) {
+                  closeButton.click();
+                }
+              });
+              
+              break;
+            } else if (dialogResult.content.includes('此時段無法預約')) {
+              console.log(`在 ${dialogResult.selector} 中找到錯誤訊息`);
+              
+              // 記錄失敗資訊
+              const errorInfo = {
+                '錯誤訊息': dialogResult.content,
+                '日期': selectedDate.text,
+                '時間': `${selectedTime.hour}:${selectedTime.minute}`,
+                '執行環境': process.env.NODE_ENV || 'development',
+                '時間戳記': new Date().toISOString()
+              };
+              console.log('預約失敗資訊：', errorInfo);
+              
+              // 截取失敗畫面
+              await page.screenshot({ 
+                path: 'error.png', 
+                fullPage: true 
+              });
+              
+              // 點擊確定按鈕
+              await page.evaluate(() => {
+                const confirmButton = document.querySelector('.dialog .button') ||
+                                    document.querySelector('.el-message-box__btns .el-button');
+                if (confirmButton) {
+                  confirmButton.click();
+                }
+              });
+              
+              throw new Error('此時段無法預約');
+            }
           }
-
-          // 擷取成功截圖
-          await page.screenshot({ path: 'booking_success.png', fullPage: true });
-          console.log('已儲存成功截圖');
-          console.log('預約流程完成！');
-
-        } catch (error) {
-          console.log('檢查預約結果時發生錯誤：', error);
-          await page.screenshot({ path: 'error_state.png', fullPage: true });
-          console.log('已儲存錯誤狀態截圖');
-          throw error;
+          
+          if (!success) {
+            await wait(2000);
+          }
         }
     } catch (error) {
         console.error('發生錯誤：', error);
