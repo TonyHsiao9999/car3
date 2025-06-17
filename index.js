@@ -452,6 +452,20 @@ async function bookCar() {
 
         console.log('預約成功！');
 
+        // 列印所有包含「登入成功」的元素資訊
+        const successElements = await page.$$eval('*', elements =>
+          elements
+            .filter(el => el.textContent && el.textContent.includes('登入成功'))
+            .map(el => ({
+              tag: el.tagName,
+              class: el.className,
+              id: el.id,
+              text: el.textContent,
+              outerHTML: el.outerHTML
+            }))
+        );
+        console.log('所有包含「登入成功」的元素：', successElements);
+
     } catch (error) {
         console.error('預約過程發生錯誤：', error);
         throw error;
