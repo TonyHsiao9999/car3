@@ -115,10 +115,29 @@ async function bookCar() {
         });
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // 2. 點擊「我知道了」
+        // 2. 點擊「我知道了」按鈕
         console.log('點擊「我知道了」按鈕...');
         await retry(async () => {
-            await waitAndClick(page, 'a.button-fill.button-large.color_deep_main');
+            // 等待按鈕出現
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // 尋找並點擊「我知道了」按鈕
+            const knowButton = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('a.button-fill'));
+                const button = buttons.find(btn => btn.textContent.trim() === '我知道了');
+                if (button) {
+                    button.click();
+                    return true;
+                }
+                return false;
+            });
+            
+            if (!knowButton) {
+                throw new Error('找不到「我知道了」按鈕');
+            }
+            
+            // 等待按鈕點擊後的效果
+            await new Promise(resolve => setTimeout(resolve, 2000));
         });
 
         // 3. 登入流程
@@ -154,6 +173,7 @@ async function bookCar() {
             
             // 等待登入成功訊息
             console.log('等待登入成功訊息...');
+            let loginSuccess = false;
             try {
                 await page.waitForFunction(
                     () => {
@@ -162,7 +182,7 @@ async function bookCar() {
                     },
                     { timeout: 15000 }
                 );
-                
+                loginSuccess = true;
                 // 點擊確定按鈕
                 console.log('點擊確定按鈕...');
                 const confirmButton = await page.waitForSelector('.dialog-button', { visible: true });
@@ -172,6 +192,19 @@ async function bookCar() {
                 }
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
+            }
+            // 無論成功或失敗都截圖
+            await page.screenshot({ path: 'login_result.png', fullPage: true });
+            // 印出所有 dialog-text 或錯誤訊息
+            const dialogs = await page.evaluate(() => {
+                return Array.from(document.querySelectorAll('.dialog-text')).map(e => e.textContent.trim());
+            });
+            if (dialogs.length > 0) {
+                console.log('畫面上所有 dialog-text：', dialogs);
+            } else {
+                console.log('畫面上沒有 dialog-text');
+            }
+            if (!loginSuccess) {
                 throw new Error('登入失敗：無法確認登入狀態');
             }
         });
