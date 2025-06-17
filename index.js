@@ -111,146 +111,30 @@ async function bookCar() {
         console.log('等待頁面載入完成...');
         await page.waitForTimeout(5000);
 
-        // 點擊「我知道了」按鈕
-        console.log('嘗試點擊「我知道了」按鈕...');
-        try {
-            await retry(async () => {
-                const button = await page.waitForSelector('a.button-fill:nth-child(2)', { 
-                    timeout: 5000,
-                    visible: true 
-                });
-                
-                if (button) {
-                    await button.click();
-                    console.log('已點擊「我知道了」按鈕！');
-                }
-            });
-        } catch (error) {
-            console.log('找不到「我知道了」按鈕，繼續執行...');
-        }
+        // 自動點擊「我知道了」按鈕
+        console.log('嘗試自動點擊「我知道了」按鈕...');
+        await page.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('a.button.button-fill.button-large.color_deep_main'));
+            const knowBtn = btns.find(btn => btn.textContent.trim() === '我知道了');
+            if (knowBtn) knowBtn.click();
+        });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 直接填入登入表單
+        console.log('填入登入表單...');
+        await page.type('input[name="IDNumber"]', ID_NUMBER);
+        await page.type('input[name="password"]', PASSWORD);
+
+        // 點擊表單內的「民眾登入」按鈕
+        console.log('點擊表單內的「民眾登入」按鈕...');
+        await page.evaluate(() => {
+            const btn = document.querySelector('a.button.button-fill.button-large.color_deep_main');
+            if (btn && btn.textContent.trim() === '民眾登入') btn.click();
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 等待頁面載入完成
         console.log('等待頁面載入完成...');
-        await page.waitForTimeout(5000);
-
-        // 輸入身分證字號
-        console.log('輸入身分證字號...');
-        await retry(async () => {
-            const idInput = await page.waitForSelector('#IDNumber', { 
-                timeout: 60000,
-                visible: true 
-            });
-            
-            if (idInput) {
-                await idInput.type(ID_NUMBER, { delay: 100 });
-                console.log('已輸入身分證字號');
-            } else {
-                throw new Error('找不到身分證字號輸入框');
-            }
-        });
-
-        // 輸入密碼
-        console.log('輸入密碼...');
-        await retry(async () => {
-            const passwordInput = await page.waitForSelector('#password', { 
-                timeout: 60000,
-                visible: true 
-            });
-            
-            if (passwordInput) {
-                await passwordInput.type(PASSWORD, { delay: 100 });
-                console.log('已輸入密碼');
-            } else {
-                throw new Error('找不到密碼輸入框');
-            }
-        });
-
-        // 點擊登入按鈕
-        console.log('點擊登入按鈕...');
-        await retry(async () => {
-            // 先列出所有按鈕和連結
-            const buttons = await page.$$('button, a');
-            console.log('找到按鈕和連結數量：', buttons.length);
-            
-            for (const button of buttons) {
-                const text = await page.evaluate(el => el.textContent.trim(), button);
-                const href = await page.evaluate(el => el.href, button);
-                const className = await page.evaluate(el => el.className, button);
-                console.log('按鈕/連結文字：', text);
-                console.log('按鈕/連結 href：', href);
-                console.log('按鈕/連結 class：', className);
-            }
-
-            // 嘗試多個可能的選擇器
-            const selectors = [
-                'a.button.button-fill.button-large.color_deep_main',
-                'a.button-fill.button-large.color_deep_main',
-                'a.button-fill:nth-child(2)',
-                'a.link:nth-child(2)',
-                'a[href*="login"]',
-                'button[type="submit"]',
-                'input[type="submit"]',
-                'button:contains("登入")',
-                'a:contains("登入")'
-            ];
-
-            for (const selector of selectors) {
-                try {
-                    console.log('嘗試選擇器：', selector);
-                    const button = await page.waitForSelector(selector, { 
-                        timeout: 5000,
-                        visible: true 
-                    });
-                    
-                    if (button) {
-                        console.log('找到按鈕，使用選擇器：', selector);
-                        await button.click();
-                        console.log('已點擊登入按鈕');
-                        return;
-                    }
-                } catch (error) {
-                    console.log('選擇器無效：', selector);
-                }
-            }
-
-            // 如果上述選擇器都失敗，嘗試用文字內容尋找
-            const loginButton = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button, a, input[type="submit"]'));
-                const loginButton = buttons.find(btn => 
-                    btn.textContent.includes('登入') || 
-                    btn.value?.includes('登入') ||
-                    btn.innerText?.includes('登入')
-                );
-                if (loginButton) {
-                    loginButton.click();
-                    return true;
-                }
-                return false;
-            });
-
-            if (!loginButton) {
-                throw new Error('找不到登入按鈕');
-            }
-        });
-
-        // 等待登入成功
-        console.log('等待登入成功...');
-        await page.waitForTimeout(5000);
-
-        // 點擊確認按鈕（如果存在）
-        try {
-            await retry(async () => {
-                const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 5000 });
-                if (confirmButton) {
-                    await confirmButton.click();
-                    console.log('已點擊確認按鈕！');
-                }
-            });
-        } catch (error) {
-            console.log('找不到確認按鈕，繼續執行...');
-        }
-
-        // 等待頁面載入完成
         await page.waitForTimeout(5000);
 
         // 點擊預約連結
