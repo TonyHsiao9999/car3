@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('chrome-aws-lambda');
 const cron = require('node-cron');
 
 // 載入環境變數
@@ -18,20 +19,14 @@ async function bookCar() {
     console.log('開始執行預約流程...');
     console.log('使用帳號：', ID_NUMBER);
     
+    const executablePath = await chromium.executablePath;
+    
     const browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--window-size=1920x1080',
-            '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process',
-            '--disable-blink-features=AutomationControlled'
-        ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: executablePath || process.env.PUPPETEER_EXECUTABLE_PATH,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
     });
     
     try {
