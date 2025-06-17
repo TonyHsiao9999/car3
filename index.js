@@ -360,8 +360,7 @@ async function bookCar() {
             console.log('所有日期選項：', options.map(opt => ({
               value: opt.value,
               text: opt.text,
-              disabled: opt.disabled,
-              selected: opt.selected
+              disabled: opt.disabled
             })));
             
             select.value = lastOption.value;
@@ -389,11 +388,21 @@ async function bookCar() {
             console.log('所有小時選項：', Array.from(hourSelect.options).map(opt => ({
               value: opt.value,
               text: opt.text,
-              disabled: opt.disabled,
-              selected: opt.selected
+              disabled: opt.disabled
             })));
             
-            hourSelect.value = '16';
+            // 找出所有可用的小時選項
+            const hourOptions = Array.from(hourSelect.options)
+              .filter(opt => !opt.disabled)
+              .map(opt => opt.value);
+            
+            console.log('可用小時選項：', hourOptions);
+            
+            // 優先選擇下午的時段（13-17點）
+            const preferredHours = hourOptions.filter(h => parseInt(h) >= 13 && parseInt(h) <= 17);
+            hour = preferredHours.length > 0 ? preferredHours[0] : hourOptions[0];
+            
+            hourSelect.value = hour;
             hour = hourSelect.value;
             hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
             hourSelect.dispatchEvent(new Event('input', { bubbles: true }));
@@ -404,14 +413,23 @@ async function bookCar() {
             console.log('所有分鐘選項：', Array.from(minuteSelect.options).map(opt => ({
               value: opt.value,
               text: opt.text,
-              disabled: opt.disabled,
-              selected: opt.selected
+              disabled: opt.disabled
             })));
             
-            minuteSelect.value = '40';
-            minute = minuteSelect.value;
-            minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
-            minuteSelect.dispatchEvent(new Event('input', { bubbles: true }));
+            // 找出所有可用的分鐘選項
+            const minuteOptions = Array.from(minuteSelect.options)
+              .filter(opt => !opt.disabled)
+              .map(opt => opt.value);
+            
+            console.log('可用分鐘選項：', minuteOptions);
+            
+            if (minuteOptions.length > 0) {
+              minute = minuteOptions[0];
+              minuteSelect.value = minute;
+              minute = minuteSelect.value;
+              minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
+              minuteSelect.dispatchEvent(new Event('input', { bubbles: true }));
+            }
           }
           return { hour, minute };
         });
@@ -419,6 +437,21 @@ async function bookCar() {
         console.log('選擇的預約時間：', selectedTime);
         await wait(2000);
         await page.screenshot({ path: 'after_select_time.png', fullPage: true });
+
+        // 檢查選擇的時間是否有效
+        if (!selectedTime.hour || !selectedTime.minute) {
+          throw new Error('無法選擇有效的預約時間');
+        }
+
+        // 記錄時區資訊
+        const timezoneInfo = await page.evaluate(() => {
+          return {
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            offset: new Date().getTimezoneOffset(),
+            localTime: new Date().toLocaleString()
+          };
+        });
+        console.log('時區資訊：', timezoneInfo);
 
         // 選擇其他選項
         console.log('選擇其他選項...');
