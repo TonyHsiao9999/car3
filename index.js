@@ -332,10 +332,31 @@ async function bookCar() {
                 
                 if (!isBookingPage) {
                     console.log('不在預約頁面，嘗試點擊民眾登入按鈕...');
-                    // 嘗試點擊民眾登入按鈕
-                    const loginButton = await page.$('a.link.panel-close.user_login');
-                    if (loginButton) {
-                        await loginButton.click();
+                    
+                    // 等待按鈕出現並可點擊
+                    await page.waitForSelector('a.link.panel-close.user_login', {
+                        visible: true,
+                        timeout: 5000
+                    }).catch(() => console.log('等待民眾登入按鈕超時'));
+                    
+                    // 確保按鈕可見且可點擊
+                    const isButtonClickable = await page.evaluate(() => {
+                        const button = document.querySelector('a.link.panel-close.user_login');
+                        if (!button) return false;
+                        
+                        const style = window.getComputedStyle(button);
+                        return style.display !== 'none' && 
+                               style.visibility !== 'hidden' && 
+                               style.opacity !== '0' &&
+                               !button.disabled;
+                    });
+                    
+                    if (isButtonClickable) {
+                        // 使用 JavaScript 點擊按鈕
+                        await page.evaluate(() => {
+                            const button = document.querySelector('a.link.panel-close.user_login');
+                            if (button) button.click();
+                        });
                         console.log('已點擊民眾登入按鈕！');
                         
                         // 等待頁面導航完成
@@ -359,7 +380,7 @@ async function bookCar() {
                             return;
                         }
                     } else {
-                        console.log('找不到民眾登入按鈕');
+                        console.log('民眾登入按鈕不可點擊');
                     }
                 }
                 
