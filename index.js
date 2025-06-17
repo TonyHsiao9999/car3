@@ -48,15 +48,36 @@ async function retry(fn, retries = MAX_RETRIES) {
     }
 }
 
+async function waitAndClick(page, selector, timeout = 10000) {
+    const element = await page.waitForSelector(selector, { timeout });
+    if (!element) {
+        throw new Error(`找不到元素：${selector}`);
+    }
+    await element.click();
+    await page.waitForTimeout(2000);
+}
+
+async function waitAndType(page, selector, text, timeout = 10000) {
+    const element = await page.waitForSelector(selector, { timeout });
+    if (!element) {
+        throw new Error(`找不到元素：${selector}`);
+    }
+    await element.type(text, { delay: 100 });
+    await page.waitForTimeout(1000);
+}
+
+async function waitAndSelect(page, selector, value, timeout = 10000) {
+    const element = await page.waitForSelector(selector, { timeout });
+    if (!element) {
+        throw new Error(`找不到元素：${selector}`);
+    }
+    await page.select(selector, value);
+    await page.waitForTimeout(1000);
+}
+
 async function bookCar() {
     console.log('\n開始執行預約流程...\n');
     
-    // 設定帳號密碼
-    const userId = 'A102574899';
-    const userPassword = 'visi319VISI';
-    
-    console.log(`使用帳號： ${userId}\n`);
-
     const browser = await puppeteer.launch({
         headless: 'new',
         args: [
@@ -75,301 +96,111 @@ async function bookCar() {
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
-
-        // 設定頁面超時
         page.setDefaultNavigationTimeout(60000);
         page.setDefaultTimeout(60000);
 
-        // 監聽頁面錯誤
-        page.on('error', err => {
-            console.error('頁面錯誤：', err);
-        });
-
-        page.on('pageerror', err => {
-            console.error('頁面錯誤：', err);
-        });
-
-        // 監聽請求失敗
+        // 監聽各種錯誤
+        page.on('error', err => console.error('頁面錯誤：', err));
+        page.on('pageerror', err => console.error('頁面錯誤：', err));
         page.on('requestfailed', request => {
             console.error('請求失敗：', request.url(), request.failure().errorText);
         });
+        page.on('console', msg => console.log('頁面訊息:', msg.text()));
 
-        // 監聽控制台訊息
-        page.on('console', msg => {
-            console.log('頁面訊息:', msg.text());
+        // 1. 連線到網站
+        console.log('正在開啟網頁...');
+        await page.goto('https://www.ntpc.ltc-car.org/', { 
+            waitUntil: 'networkidle0', 
+            timeout: 60000 
         });
+        await page.waitForTimeout(3000);
 
-        console.log('正在開啟網頁...\n');
-        await page.goto('https://www.ntpc.ltc-car.org/', { waitUntil: 'networkidle0', timeout: 60000 });
-
-        // 等待頁面載入完成
-        console.log('等待頁面載入完成...\n');
-        await page.waitForTimeout(5000);
-
-        // 點擊「我知道了」按鈕
-        console.log('嘗試自動點擊「我知道了」按鈕...\n');
-        try {
-            const iKnowButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-            if (iKnowButton) {
-                await iKnowButton.click();
-                console.log('已點擊「我知道了」按鈕！\n');
-                await page.waitForTimeout(3000);
-            }
-        } catch (error) {
-            console.log('「我知道了」按鈕不存在或無法點擊，繼續執行...\n');
-        }
-
-        // 等待登入表單出現
-        console.log('等待登入表單出現...\n');
-        await page.waitForSelector('input[name="IDNumber"]', { timeout: 10000 });
-        await page.waitForSelector('input[name="password"]', { timeout: 10000 });
-
-        // 填入登入表單
-        console.log('填入登入表單...\n');
-        
-        // 先清空輸入框
-        await page.evaluate(() => {
-          const idInput = document.querySelector('input[name="IDNumber"]');
-          const pwdInput = document.querySelector('input[name="password"]');
-          if (idInput) idInput.value = '';
-          if (pwdInput) pwdInput.value = '';
-        });
-        await page.waitForTimeout(1000);
-        
-        // 使用 type 方法輸入
-        console.log('正在輸入身分證字號...\n');
-        await page.type('input[name="IDNumber"]', userId, { delay: 100 });
-        await page.waitForTimeout(1000);
-        
-        console.log('正在輸入密碼...\n');
-        await page.type('input[name="password"]', userPassword, { delay: 100 });
-        await page.waitForTimeout(1000);
-        
-        // 確認帳號密碼是否確實填入
-        const idNumberValue = await page.evaluate(() => {
-          const input = document.querySelector('input[name="IDNumber"]');
-          return input ? input.value : '';
-        });
-        const passwordValue = await page.evaluate(() => {
-          const input = document.querySelector('input[name="password"]');
-          return input ? input.value : '';
-        });
-
-        console.log('檢查輸入值：');
-        console.log(`身分證字號：${idNumberValue}`);
-        console.log(`密碼：${passwordValue}\n`);
-
-        if (idNumberValue !== userId || passwordValue !== userPassword) {
-          console.log('帳號密碼未正確填入，重試中...\n');
-          // 清空輸入框
-          await page.evaluate(() => {
-            const idInput = document.querySelector('input[name="IDNumber"]');
-            const pwdInput = document.querySelector('input[name="password"]');
-            if (idInput) idInput.value = '';
-            if (pwdInput) pwdInput.value = '';
-          });
-          await page.waitForTimeout(1000);
-
-          // 使用 JavaScript 直接設定值
-          console.log('使用 JavaScript 直接設定值...\n');
-          await page.evaluate((id, pwd) => {
-            const idInput = document.querySelector('input[name="IDNumber"]');
-            const pwdInput = document.querySelector('input[name="password"]');
-            if (idInput) {
-              idInput.value = id;
-              idInput.dispatchEvent(new Event('input', { bubbles: true }));
-              idInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            if (pwdInput) {
-              pwdInput.value = pwd;
-              pwdInput.dispatchEvent(new Event('input', { bubbles: true }));
-              pwdInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          }, userId, userPassword);
-          
-          await page.waitForTimeout(1000);
-
-          // 再次確認
-          const retryIdNumberValue = await page.evaluate(() => {
-            const input = document.querySelector('input[name="IDNumber"]');
-            return input ? input.value : '';
-          });
-          const retryPasswordValue = await page.evaluate(() => {
-            const input = document.querySelector('input[name="password"]');
-            return input ? input.value : '';
-          });
-
-          console.log('重試後檢查輸入值：');
-          console.log(`身分證字號：${retryIdNumberValue}`);
-          console.log(`密碼：${retryPasswordValue}\n`);
-
-          if (retryIdNumberValue !== userId || retryPasswordValue !== userPassword) {
-            throw new Error('無法正確填入帳號密碼');
-          }
-        }
-
-        console.log('帳號密碼已確認填入！\n');
-
-        // 點擊民眾登入按鈕
-        console.log('準備點擊民眾登入按鈕...\n');
-        const loginButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-        if (!loginButton) {
-          throw new Error('找不到民眾登入按鈕');
-        }
-
-        // 檢查按鈕是否可見和可點擊
-        const isVisible = await loginButton.isVisible();
-        const isEnabled = await page.evaluate(button => {
-          return !button.disabled && !button.classList.contains('disabled');
-        }, loginButton);
-
-        console.log(`按鈕狀態：可見=${isVisible}, 可點擊=${isEnabled}\n`);
-
-        if (!isVisible || !isEnabled) {
-          throw new Error('民眾登入按鈕不可見或不可點擊');
-        }
-
-        // 使用 JavaScript 點擊按鈕
-        console.log('使用 JavaScript 點擊按鈕...\n');
-        await page.evaluate(button => button.click(), loginButton);
-        console.log('已點擊民眾登入按鈕，等待回應...');
-
-        // 等待 5 秒讓頁面反應
-        await page.waitForTimeout(5000);
-
-        // 輸出目前網址
-        const currentUrl = await page.evaluate(() => window.location.href);
-        console.log('登入後目前網址：', currentUrl);
-
-        // 輸出所有 dialog-button 文字（登入後）
-        const dialogButtonsAfterLogin = await page.$$eval('span.dialog-button', btns =>
-          btns.map(btn => btn.textContent.trim())
-        );
-        console.log('目前所有 dialog-button 文字：', dialogButtonsAfterLogin);
-
-        // 輸出 body 前 500 字
-        const bodyPreview = await page.evaluate(() => document.body.innerText.slice(0, 500));
-        console.log('body 頁面預覽：', bodyPreview);
-
-        // 檢查是否有錯誤訊息
-        const errorMessage = await page.evaluate(() => {
-          const errorElement = document.querySelector('.error-message');
-          return errorElement ? errorElement.textContent : null;
-        });
-
-        if (errorMessage) {
-          console.log(`登入錯誤：${errorMessage}\n`);
-          throw new Error(`登入失敗：${errorMessage}`);
-        }
-
-        // 等待頁面載入完成
-        console.log('等待頁面載入完成...\n');
-        await page.waitForTimeout(5000);
-
-        // 檢查是否在預約頁面
-        const isBookingPage = await page.evaluate(() => {
-          return window.location.href.includes('/ntpc/booking');
-        });
-
-        if (!isBookingPage) {
-          throw new Error('無法進入預約頁面');
-        }
-
-        console.log('成功進入預約頁面！\n');
-
-        // 選擇上車地點
-        console.log('選擇上車地點...');
+        // 2. 點擊「我知道了」
+        console.log('點擊「我知道了」按鈕...');
         await retry(async () => {
-            const locationSelect = await page.waitForSelector('#pickUp_location', { timeout: 60000 });
-            if (locationSelect) {
-                await locationSelect.select('2'); // 選擇第二個選項
-                console.log('已選擇上車地點');
-            } else {
-                throw new Error('找不到上車地點選擇器');
-            }
+            await waitAndClick(page, 'a.button-fill.button-large.color_deep_main');
         });
 
-        // 輸入地址
-        console.log('輸入地址...');
+        // 3. 登入流程
+        console.log('開始登入流程...');
         await retry(async () => {
-            const addressInput = await page.waitForSelector('#pickUp_address', { timeout: 60000 });
-            if (addressInput) {
-                await addressInput.type('亞東紀念醫院', { delay: 100 });
-                console.log('已輸入地址');
-            } else {
-                throw new Error('找不到地址輸入框');
-            }
+            await waitAndType(page, 'input[name="IDNumber"]', ID_NUMBER);
+            await waitAndType(page, 'input[name="password"]', PASSWORD);
+            await waitAndClick(page, 'a.button-fill.button-large.color_deep_main');
         });
 
-        // 等待 Google 自動完成框
-        console.log('等待 Google 自動完成框出現...');
-        try {
-            await page.waitForSelector('.pac-container', { timeout: 5000 });
-            console.log('找到 Google 自動完成框！');
-            
-            // 選擇第一個建議
-            await page.keyboard.press('ArrowDown');
-            await page.keyboard.press('Enter');
-        } catch (error) {
-            console.log('未找到 Google 自動完成框，繼續執行...');
-        }
-
-        // 選擇時間
-        console.log('選擇時間...');
+        // 4. 等待並點擊登入成功的確定按鈕
+        console.log('等待登入成功確認...');
         await retry(async () => {
-            const timeSelect = await page.waitForSelector('#pickUp_time', { timeout: 60000 });
-            if (timeSelect) {
-                await timeSelect.select('14:00'); // 選擇下午 2 點
-                console.log('已選擇時間');
-            } else {
-                throw new Error('找不到時間選擇器');
-            }
+            await page.waitForFunction(
+                () => document.querySelector('div.dialog-text')?.textContent.includes('登入成功'),
+                { timeout: 10000 }
+            );
+            await waitAndClick(page, 'span.dialog-button');
         });
 
-        // 點擊確認按鈕
-        console.log('點擊確認按鈕...');
+        // 5. 點擊「新增預約」
+        console.log('點擊新增預約...');
         await retry(async () => {
-            const confirmButton = await page.waitForSelector('a.button-fill:nth-child(2)', { timeout: 60000 });
-            if (confirmButton) {
-                await confirmButton.click();
-                console.log('已點擊確認按鈕');
-            } else {
-                throw new Error('找不到確認按鈕');
-            }
+            await waitAndClick(page, 'a.button-fill.button-large:has-text("新增預約")');
         });
 
-        // 等待預約成功訊息
+        // 6-7. 設定上車地點
+        console.log('設定上車地點...');
         await retry(async () => {
-            await page.waitForSelector('.success-message', { timeout: 60000 });
+            await waitAndSelect(page, 'select[name="boarding_type"]', '醫療院所');
+            await waitAndType(page, 'input[name="boarding_address"]', '亞東紀念醫院');
+            await page.waitForTimeout(2000);
+            await waitAndClick(page, '.pac-item:first-child');
         });
 
-        console.log('預約成功！');
+        // 8. 設定下車地點
+        console.log('設定下車地點...');
+        await retry(async () => {
+            await waitAndSelect(page, 'select[name="alighting_type"]', '住家');
+        });
 
-        // 等待「確定」按鈕出現（最長 15 秒）
-        await page.waitForFunction(() => {
-          return Array.from(document.querySelectorAll('span.dialog-button')).some(btn => btn.textContent.trim() === '確定');
-        }, { timeout: 15000 });
+        // 9. 設定預約時間
+        console.log('設定預約時間...');
+        await retry(async () => {
+            const dateSelects = await page.$$('select[name^="booking_date"]');
+            await dateSelects[0].select('最後一個選項的值');
+            await dateSelects[1].select('16');
+            await dateSelects[2].select('40');
+        });
 
-        // 列印所有 dialog-button 文字
-        const dialogButtons = await page.$$eval('span.dialog-button', btns =>
-          btns.map(btn => btn.textContent.trim())
-        );
-        console.log('所有 dialog-button 文字：', dialogButtons);
+        // 10-14. 設定其他選項
+        console.log('設定其他選項...');
+        await retry(async () => {
+            await page.click('input[name="arrival_agreement"][value="不同意"]');
+            await waitAndSelect(page, 'select[name="companion_count"]', '1');
+            await page.click('input[name="share_ride"][value="否"]');
+            await page.click('input[name="wheelchair"][value="是"]');
+            await page.click('input[name="large_wheelchair"][value="否"]');
+        });
 
-        // 點擊「確定」按鈕
-        let clicked = false;
-        for (const btn of await page.$$('span.dialog-button')) {
-          const text = await (await btn.getProperty('textContent')).jsonValue();
-          if (text.trim() === '確定') {
-            await btn.click();
-            console.log('已點擊確定按鈕');
-            clicked = true;
-            break;
-          }
-        }
-        if (!clicked) {
-          console.log('沒有找到「確定」按鈕');
-        }
+        // 15. 點擊下一步
+        console.log('進入確認頁面...');
+        await retry(async () => {
+            await waitAndClick(page, 'button:has-text("下一步，確認預約資訊")');
+        });
+
+        // 16. 送出預約
+        console.log('送出預約...');
+        await retry(async () => {
+            await waitAndClick(page, 'button:has-text("送出預約")');
+        });
+
+        // 17. 確認預約成功
+        console.log('確認預約結果...');
+        await retry(async () => {
+            await page.waitForFunction(
+                () => document.body.textContent.includes('已完成預約'),
+                { timeout: 10000 }
+            );
+        });
+
+        console.log('預約成功完成！');
 
     } catch (error) {
         console.error('預約過程發生錯誤：', error);
