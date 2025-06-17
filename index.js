@@ -15,27 +15,23 @@ const ID_NUMBER = String(process.env.CAR_BOOKING_ID);
 const PASSWORD = String(process.env.CAR_BOOKING_PASSWORD);
 
 async function bookCar() {
-    console.log('開始執行訂車程序...');
-    console.log('使用的帳號：', process.env.CAR_BOOKING_ID);
-    console.log('使用的密碼：', process.env.CAR_BOOKING_PASSWORD);
+    console.log('開始執行預約流程...');
+    console.log('使用帳號：', ID_NUMBER);
     
     const browser = await puppeteer.launch({
-        headless: false,
-        defaultViewport: null,
+        headless: 'new',
         args: [
-            '--start-maximized',
-            '--disable-geolocation',
-            '--disable-notifications',
-            '--disable-permissions-api',
             '--no-sandbox',
             '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--window-size=1920x1080',
             '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process',
-            '--disable-blink-features=AutomationControlled',
-            '--disable-site-isolation-trials',
-            '--use-fake-ui-for-media-stream',
-            '--use-fake-device-for-media-stream'
-        ]
+            '--disable-blink-features=AutomationControlled'
+        ],
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     });
     
     try {
