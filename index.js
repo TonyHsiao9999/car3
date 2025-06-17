@@ -360,7 +360,8 @@ async function bookCar() {
             console.log('所有日期選項：', options.map(opt => ({
               value: opt.value,
               text: opt.text,
-              disabled: opt.disabled
+              disabled: opt.disabled,
+              selected: opt.selected
             })));
             
             select.value = lastOption.value;
@@ -384,6 +385,14 @@ async function bookCar() {
           let hour = '', minute = '';
 
           if (hourSelect) {
+            // 記錄所有小時選項的詳細資訊
+            console.log('所有小時選項：', Array.from(hourSelect.options).map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            })));
+            
             hourSelect.value = '16';
             hour = hourSelect.value;
             hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -391,6 +400,14 @@ async function bookCar() {
           }
 
           if (minuteSelect) {
+            // 記錄所有分鐘選項的詳細資訊
+            console.log('所有分鐘選項：', Array.from(minuteSelect.options).map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            })));
+            
             minuteSelect.value = '40';
             minute = minuteSelect.value;
             minuteSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -405,65 +422,51 @@ async function bookCar() {
 
         // 選擇其他選項
         console.log('選擇其他選項...');
-        await page.click('.form_item:nth-child(6) .cus_checkbox_type1:nth-child(2) > div');  // 不同意30分
-        await page.select('select#accompany_label', '1');  // 陪同1人
-        await page.click('.form_item:nth-child(10) .cus_checkbox_type1:nth-child(2) > div');  // 共乘否
-        await page.click('.form_item:nth-child(11) .cus_checkbox_type1:nth-child(1) > div');  // 搭輪椅上車是
-        await page.click('.form_item:nth-child(12) .cus_checkbox_type1:nth-child(2) > div');  // 大型輪椅否
-        await wait(2000);
-        await page.screenshot({ path: 'after_select_options.png', fullPage: true });
+        await page.evaluate(() => {
+          // 記錄所有選項的狀態
+          const allSelects = document.querySelectorAll('select');
+          console.log('所有下拉選單狀態：', Array.from(allSelects).map(select => ({
+            id: select.id,
+            value: select.value,
+            options: Array.from(select.options).map(opt => ({
+              value: opt.value,
+              text: opt.text,
+              disabled: opt.disabled,
+              selected: opt.selected
+            }))
+          })));
 
-        // 點擊下一步
-        await page.click('.page_bottom > .button');
-        await wait(5000);  // 增加等待時間到 5 秒
-        await page.screenshot({ path: 'after_click_next.png', fullPage: true });
-
-        // 等待頁面載入完成
-        await page.waitForFunction(
-          () => {
-            // 檢查頁面是否還在載入中
-            const loadingIndicator = document.querySelector('.loading');
-            if (loadingIndicator) return false;
-            
-            // 檢查送出按鈕是否存在且可點擊
-            const button = document.querySelector('button.button-fill:nth-child(2)');
-            if (!button) return false;
-            
-            const style = window.getComputedStyle(button);
-            return style.display !== 'none' && 
-                   style.visibility !== 'hidden' && 
-                   style.opacity !== '0' &&
-                   !button.disabled;
-          },
-          { timeout: 30000 }  // 等待最多 30 秒
-        );
-
-        // 再次確認按鈕狀態
-        const buttonState = await page.evaluate(() => {
-            const button = document.querySelector('button.button-fill:nth-child(2)');
-            if (!button) return { exists: false };
-            
-            const style = window.getComputedStyle(button);
-            return {
-                exists: true,
-                display: style.display,
-                visibility: style.visibility,
-                opacity: style.opacity,
-                disabled: button.disabled,
-                text: button.textContent.trim()
-            };
+          const selects = document.querySelectorAll('select');
+          selects.forEach(select => {
+            if (select.id !== 'appointment_date' && 
+                select.id !== 'appointment_hour' && 
+                select.id !== 'appointment_minutes') {
+              const options = Array.from(select.options);
+              if (options.length > 1) {
+                select.value = options[1].value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            }
+          });
         });
 
-        console.log('送出按鈕狀態：', buttonState);
-
-        if (!buttonState.exists || buttonState.disabled) {
-            throw new Error('送出按鈕不可用');
-        }
-
-        // 點擊送出預約
-        await page.click('button.button-fill:nth-child(2)');
-        console.log('已點擊送出預約按鈕');
-        await wait(2000);  // 等待 2 秒
+        // 點擊送出按鈕
+        console.log('點擊送出按鈕...');
+        await page.evaluate(() => {
+          const submitButton = document.querySelector('button[type="submit"]');
+          if (submitButton) {
+            console.log('送出按鈕狀態：', {
+              text: submitButton.textContent,
+              disabled: submitButton.disabled,
+              type: submitButton.type,
+              style: window.getComputedStyle(submitButton)
+            });
+            submitButton.click();
+          } else {
+            console.log('找不到送出按鈕');
+          }
+        });
 
         // 等待浮動視窗出現
         console.log('等待浮動視窗出現...');
@@ -473,6 +476,11 @@ async function bookCar() {
                           document.querySelector('.el-message-box__wrapper') ||
                           document.querySelector('.el-message-box');
             if (dialog) {
+              console.log('浮動視窗狀態：', {
+                className: dialog.className,
+                textContent: dialog.textContent,
+                style: window.getComputedStyle(dialog)
+              });
               return dialog.textContent;
             }
             return null;
