@@ -124,18 +124,6 @@ async function bookCar() {
         // 3. 登入流程
         console.log('開始登入流程...');
         await retry(async () => {
-            // 確保頁面完全載入
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            // 等待並點擊「我知道了」按鈕
-            console.log('點擊「我知道了」按鈕...');
-            const knowButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
-            if (!knowButton) {
-                throw new Error('找不到「我知道了」按鈕');
-            }
-            await knowButton.click();
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
             // 等待登入表單出現
             console.log('等待登入表單...');
             await page.waitForSelector('input[name="IDNumber"]', { visible: true });
