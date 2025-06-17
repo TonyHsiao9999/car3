@@ -531,9 +531,17 @@ async function bookCar() {
               if (dialog) {
                 // 清理文字內容，移除多餘的空白和換行
                 const content = dialog.textContent.replace(/\s+/g, ' ').trim();
+                
+                // 分離訊息和按鈕文字
+                const parts = content.split(/(確定|關閉|確認|OK|Cancel|關閉)/);
+                const message = parts[0].trim();
+                const buttonText = parts[1] || '';
+                
                 return {
                   selector: dialog.className,
-                  content: content
+                  content: content,
+                  message: message,
+                  buttonText: buttonText
                 };
               }
             }
@@ -544,15 +552,15 @@ async function bookCar() {
             console.log('浮動視窗內容：', dialogResult);
             
             // 檢查成功訊息（考慮不同環境的文字格式）
-            if (dialogResult.content.includes('已完成預約') || 
-                dialogResult.content.includes('預約成功') ||
-                dialogResult.content.includes('預約完成')) {
+            if (dialogResult.message.includes('已完成預約') || 
+                dialogResult.message.includes('預約成功') ||
+                dialogResult.message.includes('預約完成')) {
               console.log(`在 ${dialogResult.selector} 中找到成功訊息`);
               success = true;
               
               // 記錄成功資訊
               const successInfo = {
-                '成功訊息': dialogResult.content,
+                '成功訊息': dialogResult.message,
                 '日期': selectedDate.text,
                 '時間': `${selectedTime.hour}:${selectedTime.minute}`,
                 '執行環境': process.env.NODE_ENV || 'development',
@@ -590,13 +598,13 @@ async function bookCar() {
               break;
             } 
             // 檢查錯誤訊息（考慮不同環境的文字格式）
-            else if (dialogResult.content.includes('此時段無法預約') || 
-                     dialogResult.content.includes('無法預約')) {
+            else if (dialogResult.message.includes('此時段無法預約') || 
+                     dialogResult.message.includes('無法預約')) {
               console.log(`在 ${dialogResult.selector} 中找到錯誤訊息`);
               
               // 記錄失敗資訊
               const errorInfo = {
-                '錯誤訊息': dialogResult.content,
+                '錯誤訊息': dialogResult.message,
                 '日期': selectedDate.text,
                 '時間': `${selectedTime.hour}:${selectedTime.minute}`,
                 '執行環境': process.env.NODE_ENV || 'development',
