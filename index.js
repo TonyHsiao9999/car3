@@ -139,38 +139,84 @@ async function bookCar() {
             console.log('等待頁面導航超時，繼續執行...\n');
         });
 
+        // 等待一段時間讓頁面完全載入
+        await page.waitForTimeout(5000);
+
         // 檢查是否在預約頁面
         let isBookingPage = false;
-        try {
-            await page.waitForSelector('#pickUp_location', { timeout: 10000 });
-            isBookingPage = true;
-        } catch (error) {
-            console.log('不在預約頁面，等待確認按鈕...\n');
-        }
+        let retryCount = 0;
+        const maxRetries = 3;
 
-        if (!isBookingPage) {
-            // 等待並點擊確認按鈕
+        while (!isBookingPage && retryCount < maxRetries) {
             try {
-                const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-                if (confirmButton) {
-                    await confirmButton.click();
-                    console.log('已點擊確認按鈕！\n');
-                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-                        console.log('等待頁面導航超時，繼續執行...\n');
-                    });
+                // 檢查多個可能的選擇器
+                const selectors = [
+                    '#pickUp_location',
+                    'select[name="pickUp_location"]',
+                    'input[name="pickUp_location"]',
+                    'form[name="bookingForm"]',
+                    '.booking-form'
+                ];
+
+                for (const selector of selectors) {
+                    const element = await page.$(selector);
+                    if (element) {
+                        isBookingPage = true;
+                        console.log(`找到預約頁面元素：${selector}\n`);
+                        break;
+                    }
+                }
+
+                if (!isBookingPage) {
+                    console.log(`第 ${retryCount + 1} 次檢查：不在預約頁面，等待確認按鈕...\n`);
+                    
+                    // 等待並點擊確認按鈕
+                    try {
+                        const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
+                        if (confirmButton) {
+                            await confirmButton.click();
+                            console.log('已點擊確認按鈕！\n');
+                            
+                            // 等待頁面導航
+                            await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+                                console.log('等待頁面導航超時，繼續執行...\n');
+                            });
+                            
+                            // 等待頁面載入
+                            await page.waitForTimeout(5000);
+                        }
+                    } catch (error) {
+                        console.log('找不到確認按鈕，繼續執行...\n');
+                    }
                 }
             } catch (error) {
-                console.log('找不到確認按鈕，繼續執行...\n');
+                console.log(`第 ${retryCount + 1} 次檢查發生錯誤：${error.message}\n`);
+            }
+
+            retryCount++;
+            if (!isBookingPage && retryCount < maxRetries) {
+                console.log(`等待 5 秒後進行第 ${retryCount + 1} 次檢查...\n`);
+                await page.waitForTimeout(5000);
             }
         }
 
-        // 再次檢查是否在預約頁面
-        try {
-            await page.waitForSelector('#pickUp_location', { timeout: 10000 });
+        if (!isBookingPage) {
+            // 如果仍然不在預約頁面，嘗試重新整理
+            console.log('嘗試重新整理頁面...\n');
+            await page.reload({ waitUntil: 'networkidle0' });
+            await page.waitForTimeout(5000);
+
+            // 再次檢查是否在預約頁面
+            try {
+                await page.waitForSelector('#pickUp_location', { timeout: 10000 });
+                isBookingPage = true;
+                console.log('重新整理後成功進入預約頁面！\n');
+            } catch (error) {
+                console.log('重新整理後仍無法進入預約頁面，請檢查登入狀態。\n');
+                throw new Error('無法進入預約頁面');
+            }
+        } else {
             console.log('成功進入預約頁面！\n');
-        } catch (error) {
-            console.log('無法進入預約頁面，請檢查登入狀態。\n');
-            throw new Error('無法進入預約頁面');
         }
 
         // 選擇上車地點
