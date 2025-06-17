@@ -170,24 +170,55 @@ async function bookCar() {
                 if (!isBookingPage) {
                     console.log(`第 ${retryCount + 1} 次檢查：不在預約頁面，等待確定按鈕...\n`);
                     
-                    // 等待並點擊確定按鈕
+                    // 等待並點擊浮動視窗中的確定按鈕
                     try {
-                        const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-                        if (confirmButton) {
-                            const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
-                            if (buttonText === '確定') {
-                                await confirmButton.click();
-                                console.log('已點擊確定按鈕！\n');
-                                
-                                // 等待頁面導航
-                                await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-                                    console.log('等待頁面導航超時，繼續執行...\n');
-                                });
-                                
-                                // 等待頁面載入
-                                await page.waitForTimeout(5000);
+                        // 先檢查浮動視窗是否存在
+                        const modalDialog = await page.waitForSelector('.modal-dialog', { timeout: 5000 }).catch(() => null);
+                        if (modalDialog) {
+                            console.log('找到浮動視窗，等待確定按鈕...\n');
+                            
+                            // 在浮動視窗中尋找確定按鈕
+                            const confirmButton = await page.waitForSelector('.modal-dialog a.button-fill.button-large.color_deep_main', { timeout: 5000 });
+                            if (confirmButton) {
+                                const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
+                                if (buttonText === '確定') {
+                                    await confirmButton.click();
+                                    console.log('已點擊浮動視窗中的確定按鈕！\n');
+                                    
+                                    // 等待頁面導航
+                                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+                                        console.log('等待頁面導航超時，繼續執行...\n');
+                                    });
+                                    
+                                    // 等待頁面載入
+                                    await page.waitForTimeout(5000);
+                                } else {
+                                    console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
+                                }
                             } else {
-                                console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
+                                console.log('在浮動視窗中找不到確定按鈕\n');
+                            }
+                        } else {
+                            console.log('找不到浮動視窗，嘗試尋找其他確定按鈕...\n');
+                            
+                            // 嘗試尋找其他可能的確定按鈕
+                            const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 5000 });
+                            if (confirmButton) {
+                                const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
+                                if (buttonText === '確定') {
+                                    await confirmButton.click();
+                                    console.log('已點擊確定按鈕！\n');
+                                    
+                                    // 等待頁面導航
+                                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+                                        console.log('等待頁面導航超時，繼續執行...\n');
+                                    });
+                                    
+                                    // 等待頁面載入
+                                    await page.waitForTimeout(5000);
+                                } else {
+                                    console.log(`找到按鈕但文字不是「確定」：${buttonText}\n`);
+                                }
                             }
                         }
                     } catch (error) {
