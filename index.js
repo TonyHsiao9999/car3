@@ -136,6 +136,17 @@ async function bookCar() {
             await knowButton.click();
             await new Promise(resolve => setTimeout(resolve, 2000));
             
+            // 等待登入表單出現
+            console.log('等待登入表單...');
+            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 輸入登入資訊
+            console.log('輸入登入資訊...');
+            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
+            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             // 點擊「民眾登入」按鈕
             console.log('點擊「民眾登入」按鈕...');
             const loginButton = await page.evaluate(() => {
@@ -152,48 +163,8 @@ async function bookCar() {
                 throw new Error('找不到「民眾登入」按鈕');
             }
             
-            // 等待登入表單出現
-            console.log('等待登入表單...');
-            await page.waitForSelector('input[name="IDNumber"]', { visible: true });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 輸入登入資訊
-            console.log('輸入登入資訊...');
-            await page.type('input[name="IDNumber"]', ID_NUMBER, { delay: 100 });
-            await page.type('input[name="password"]', PASSWORD, { delay: 100 });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 點擊「民眾登入」按鈕（登入表單中的按鈕）
-            console.log('點擊登入表單中的「民眾登入」按鈕...');
-            const formLoginButton = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
-                const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
-                if (loginBtn) {
-                    loginBtn.click();
-                    return true;
-                }
-                return false;
-            });
-            
-            if (!formLoginButton) {
-                throw new Error('找不到登入表單中的「民眾登入」按鈕');
-            }
-            
-            // 等待登入結果
-            console.log('等待登入結果...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            
-            // 檢查是否有錯誤訊息
-            const errorMessage = await page.evaluate(() => {
-                const errorElement = document.querySelector('.error-message, .dialog-text');
-                return errorElement ? errorElement.textContent : null;
-            });
-            
-            if (errorMessage && errorMessage.includes('錯誤')) {
-                throw new Error(`登入失敗：${errorMessage}`);
-            }
-            
             // 等待登入成功訊息
+            console.log('等待登入成功訊息...');
             try {
                 await page.waitForFunction(
                     () => {
@@ -204,6 +175,7 @@ async function bookCar() {
                 );
                 
                 // 點擊確定按鈕
+                console.log('點擊確定按鈕...');
                 const confirmButton = await page.waitForSelector('span.dialog-button', { visible: true });
                 if (confirmButton) {
                     await confirmButton.click();
@@ -211,77 +183,97 @@ async function bookCar() {
                 }
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
-                // 檢查是否已經成功登入（可能沒有顯示成功訊息）
-                const isLoggedIn = await page.evaluate(() => {
-                    return !document.querySelector('input[name="IDNumber"]') && 
-                           !document.querySelector('input[name="password"]');
-                });
-                
-                if (!isLoggedIn) {
-                    throw new Error('無法確認登入狀態');
-                }
+                throw new Error('登入失敗：無法確認登入狀態');
             }
         });
 
-        // 4. 點擊「新增預約」
-        console.log('點擊新增預約...');
+        // 4. 預約流程
+        console.log('開始預約流程...');
         await retry(async () => {
-            await waitAndClick(page, 'a.button-fill.button-large:has-text("新增預約")');
-        });
-
-        // 6-7. 設定上車地點
-        console.log('設定上車地點...');
-        await retry(async () => {
-            await waitAndSelect(page, 'select[name="boarding_type"]', '醫療院所');
-            await waitAndType(page, 'input[name="boarding_address"]', '亞東紀念醫院');
+            // 點擊「新增預約」按鈕
+            console.log('點擊「新增預約」按鈕...');
+            const addReservationButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            if (!addReservationButton) {
+                throw new Error('找不到「新增預約」按鈕');
+            }
+            await addReservationButton.click();
             await new Promise(resolve => setTimeout(resolve, 2000));
-            await waitAndClick(page, '.pac-item:first-child');
-        });
 
-        // 8. 設定下車地點
-        console.log('設定下車地點...');
-        await retry(async () => {
-            await waitAndSelect(page, 'select[name="alighting_type"]', '住家');
-        });
+            // 選擇上車地點
+            console.log('選擇上車地點...');
+            await page.select('select[name="pickupType"]', '醫療院所');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 輸入並選擇醫院
+            console.log('輸入醫院名稱...');
+            await page.type('input[name="pickupLocation"]', '亞東紀念醫院', { delay: 100 });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 點擊第一個搜尋結果
+            const firstResult = await page.waitForSelector('.pac-item', { visible: true });
+            if (!firstResult) {
+                throw new Error('找不到醫院搜尋結果');
+            }
+            await firstResult.click();
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // 9. 設定預約時間
-        console.log('設定預約時間...');
-        await retry(async () => {
-            const dateSelects = await page.$$('select[name^="booking_date"]');
-            await dateSelects[0].select('最後一個選項的值');
-            await dateSelects[1].select('16');
-            await dateSelects[2].select('40');
-        });
+            // 選擇下車地點
+            console.log('選擇下車地點...');
+            await page.select('select[name="dropoffType"]', '住家');
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // 10-14. 設定其他選項
-        console.log('設定其他選項...');
-        await retry(async () => {
-            await page.click('input[name="arrival_agreement"][value="不同意"]');
-            await waitAndSelect(page, 'select[name="companion_count"]', '1');
-            await page.click('input[name="share_ride"][value="否"]');
-            await page.click('input[name="wheelchair"][value="是"]');
-            await page.click('input[name="large_wheelchair"][value="否"]');
-        });
+            // 選擇預約日期和時間
+            console.log('選擇預約日期和時間...');
+            const dateSelect = await page.$('select[name="date"]');
+            const dateOptions = await dateSelect.$$('option');
+            await dateOptions[dateOptions.length - 1].click();
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // 15. 點擊下一步
-        console.log('進入確認頁面...');
-        await retry(async () => {
-            await waitAndClick(page, 'button:has-text("下一步，確認預約資訊")');
-        });
+            await page.select('select[name="hour"]', '16');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.select('select[name="minute"]', '40');
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // 16. 送出預約
-        console.log('送出預約...');
-        await retry(async () => {
-            await waitAndClick(page, 'button:has-text("送出預約")');
-        });
+            // 選擇其他選項
+            console.log('選擇其他選項...');
+            await page.select('select[name="arrivalTime"]', '不同意');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.select('select[name="companions"]', '1人(免費)');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.select('select[name="sharing"]', '否');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.select('select[name="wheelchair"]', '是');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.select('select[name="largeWheelchair"]', '否');
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // 17. 確認預約成功
-        console.log('確認預約結果...');
-        await retry(async () => {
-            await page.waitForFunction(
-                () => document.body.textContent.includes('已完成預約'),
-                { timeout: 10000 }
-            );
+            // 點擊下一步按鈕
+            console.log('點擊下一步按鈕...');
+            const nextButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            if (!nextButton) {
+                throw new Error('找不到下一步按鈕');
+            }
+            await nextButton.click();
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // 點擊送出預約按鈕
+            console.log('點擊送出預約按鈕...');
+            const submitButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { visible: true });
+            if (!submitButton) {
+                throw new Error('找不到送出預約按鈕');
+            }
+            await submitButton.click();
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // 確認預約完成
+            const successMessage = await page.evaluate(() => {
+                const dialogText = document.querySelector('div.dialog-text');
+                return dialogText ? dialogText.textContent : null;
+            });
+
+            if (!successMessage || !successMessage.includes('已完成預約')) {
+                throw new Error('無法確認預約是否成功');
+            }
         });
 
         console.log('預約成功完成！');
