@@ -135,6 +135,22 @@ async function bookCar() {
             // 等待頁面載入完成
             await page.waitForTimeout(5000);
 
+            // 輸出目前頁面的 HTML 結構
+            const pageContent = await page.content();
+            console.log('目前頁面內容：', pageContent);
+
+            // 檢查所有 dialog 相關元素
+            const dialogElements = await page.evaluate(() => {
+                const elements = {
+                    dialogs: Array.from(document.querySelectorAll('div.dialog')),
+                    dialogTexts: Array.from(document.querySelectorAll('div.dialog-text')),
+                    dialogButtons: Array.from(document.querySelectorAll('span.dialog-button')),
+                    allButtons: Array.from(document.querySelectorAll('button, a.button-fill, span.dialog-button'))
+                };
+                return elements;
+            });
+            console.log('對話框相關元素：', JSON.stringify(dialogElements, null, 2));
+
             // 檢查是否有錯誤訊息
             const errorMessage = await page.evaluate(() => {
                 const errorElement = document.querySelector('.error-message');
@@ -146,8 +162,37 @@ async function bookCar() {
                 throw new Error(`登入失敗：${errorMessage}`);
             }
 
+            // 檢查目前 URL
+            const currentUrl = await page.url();
+            console.log('目前 URL：', currentUrl);
+
+            // 檢查頁面標題
+            const pageTitle = await page.title();
+            console.log('頁面標題：', pageTitle);
+
+            // 檢查是否有任何 JavaScript 錯誤
+            const jsErrors = await page.evaluate(() => {
+                return window.onerror ? window.onerror.toString() : 'No error handler';
+            });
+            console.log('JavaScript 錯誤處理器：', jsErrors);
+
             // 等待登入成功訊息
             try {
+                // 先檢查是否有任何 dialog 元素
+                const hasDialog = await page.evaluate(() => {
+                    return document.querySelector('div.dialog') !== null;
+                });
+                console.log('是否有對話框：', hasDialog);
+
+                if (hasDialog) {
+                    // 如果有對話框，檢查其內容
+                    const dialogContent = await page.evaluate(() => {
+                        const dialog = document.querySelector('div.dialog');
+                        return dialog ? dialog.textContent : 'No dialog content';
+                    });
+                    console.log('對話框內容：', dialogContent);
+                }
+
                 await page.waitForFunction(
                     () => {
                         const dialogText = document.querySelector('div.dialog-text');
