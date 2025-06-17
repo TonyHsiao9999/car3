@@ -269,53 +269,54 @@ async function bookCar() {
                 console.log('連結 class：', className);
             }
 
-            // 嘗試多個可能的選擇器
-            const selectors = [
-                'a[href*="booking"]',
-                'a[href*="reservation"]',
-                'a[href*="appointment"]',
-                'a:contains("預約")',
-                'a:contains("訂車")',
-                'a:contains("叫車")'
-            ];
-
-            for (const selector of selectors) {
-                try {
-                    console.log('嘗試選擇器：', selector);
-                    const link = await page.waitForSelector(selector, { 
-                        timeout: 5000,
-                        visible: true 
-                    });
-                    
-                    if (link) {
-                        console.log('找到連結，使用選擇器：', selector);
-                        await link.click();
-                        console.log('已點擊預約連結！');
-                        return;
-                    }
-                } catch (error) {
-                    console.log('選擇器無效：', selector);
-                }
-            }
-
-            // 如果上述選擇器都失敗，嘗試用文字內容尋找
+            // 使用 JavaScript 尋找包含特定文字的連結
             const bookingLink = await page.evaluate(() => {
                 const links = Array.from(document.querySelectorAll('a'));
-                const bookingLink = links.find(link => 
-                    link.textContent.includes('預約') || 
-                    link.textContent.includes('訂車') ||
-                    link.textContent.includes('叫車')
-                );
-                if (bookingLink) {
-                    bookingLink.click();
-                    return true;
+                const keywords = ['預約', '訂車', '叫車', '預約叫車', '預約訂車'];
+                
+                // 先嘗試找完全匹配的
+                for (const link of links) {
+                    const text = link.textContent.trim();
+                    if (keywords.some(keyword => text === keyword)) {
+                        return { found: true, text };
+                    }
                 }
-                return false;
+                
+                // 再嘗試找包含關鍵字的
+                for (const link of links) {
+                    const text = link.textContent.trim();
+                    if (keywords.some(keyword => text.includes(keyword))) {
+                        return { found: true, text };
+                    }
+                }
+                
+                return { found: false };
             });
 
-            if (!bookingLink) {
-                throw new Error('找不到預約連結');
+            if (bookingLink.found) {
+                console.log('找到預約連結，文字：', bookingLink.text);
+                
+                // 使用 XPath 找到對應的連結
+                const xpath = `//a[contains(text(), '${bookingLink.text}')]`;
+                const [link] = await page.$x(xpath);
+                
+                if (link) {
+                    await link.click();
+                    console.log('已點擊預約連結！');
+                    return;
+                }
             }
+
+            // 如果上述方法都失敗，嘗試直接點擊第一個按鈕
+            console.log('嘗試點擊第一個按鈕...');
+            const firstButton = await page.$('a.button-fill.button-large.color_deep_main');
+            if (firstButton) {
+                await firstButton.click();
+                console.log('已點擊第一個按鈕！');
+                return;
+            }
+
+            throw new Error('找不到預約連結');
         });
 
         // 等待預約頁面載入
