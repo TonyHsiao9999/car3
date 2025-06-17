@@ -379,43 +379,71 @@ async function bookCar() {
 
         // 檢查預約結果
         console.log('檢查預約結果...');
-        
-        // 修改等待預約結果的部分
         try {
+          console.log('等待對話框出現...');
+          await page.waitForSelector('.el-dialog__body', { timeout: 30000 });
+          console.log('對話框已出現，檢查內容...');
+          
+          const dialogContent = await page.evaluate(() => {
+            const dialog = document.querySelector('.el-dialog__body');
+            return dialog ? dialog.textContent : '找不到對話框';
+          });
+          console.log('當前對話框內容:', dialogContent);
+
+          console.log('等待預約結果...');
           await page.waitForFunction(
             () => {
               const dialog = document.querySelector('.el-dialog__body');
-              return dialog && (
-                dialog.textContent.includes('已完成預約') ||
-                dialog.textContent.includes('預約成功') ||
-                dialog.textContent.includes('預約完成') ||
-                dialog.textContent.includes('預約已成功') ||
-                dialog.textContent.includes('預約重複')
-              );
+              if (!dialog) {
+                console.log('找不到對話框元素');
+                return false;
+              }
+              const text = dialog.textContent;
+              console.log('對話框文字:', text);
+              return text.includes('已完成預約') ||
+                     text.includes('預約成功') ||
+                     text.includes('預約完成') ||
+                     text.includes('預約已成功') ||
+                     text.includes('預約重複');
             },
             { timeout: 120000 }
           );
 
-          console.log('恭喜預約成功！');
+          console.log('預約結果確認成功！');
           await page.screenshot({ path: 'booking_success.png' });
+          console.log('已儲存成功截圖');
           
           // 嘗試點擊確認按鈕
           try {
+            console.log('尋找確認按鈕...');
             const confirmButton = await page.waitForSelector('.el-button--primary', { timeout: 10000 });
             if (confirmButton) {
+              console.log('找到確認按鈕，準備點擊');
               await confirmButton.click();
+              console.log('已點擊確認按鈕');
               await page.waitForTimeout(2000);
             }
           } catch (buttonError) {
             console.log('找不到確認按鈕，繼續執行...');
           }
         } catch (timeoutError) {
-          console.log('等待預約結果超時，嘗試檢查頁面狀態...');
+          console.log('等待預約結果超時，檢查頁面狀態...');
           const dialog = await page.$('.el-dialog__body');
           if (dialog) {
             const dialogText = await page.evaluate(el => el.textContent, dialog);
-            console.log('對話框內容:', dialogText);
+            console.log('超時時的對話框內容:', dialogText);
+          } else {
+            console.log('超時時找不到對話框元素');
           }
+          
+          // 檢查頁面其他元素
+          const pageContent = await page.evaluate(() => document.body.textContent);
+          console.log('頁面內容:', pageContent);
+          
+          // 儲存錯誤截圖
+          await page.screenshot({ path: 'error_state.png' });
+          console.log('已儲存錯誤狀態截圖');
+          
           throw timeoutError;
         }
     } catch (error) {
