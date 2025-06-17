@@ -517,14 +517,25 @@ async function bookCar() {
           console.log(`第 ${attempts} 次檢查...`);
           
           const dialogResult = await page.evaluate(() => {
-            const dialog = document.querySelector('.dialog') || 
-                          document.querySelector('.el-message-box__wrapper') ||
-                          document.querySelector('.el-message-box');
-            if (dialog) {
-              return {
-                selector: dialog.className,
-                content: dialog.textContent
-              };
+            // 檢查所有可能的浮動視窗選擇器
+            const selectors = [
+              '.dialog',
+              '.el-message-box__wrapper',
+              '.el-message-box',
+              '[class*="dialog"]',
+              '[class*="modal"]'
+            ];
+            
+            for (const selector of selectors) {
+              const dialog = document.querySelector(selector);
+              if (dialog) {
+                // 清理文字內容，移除多餘的空白和換行
+                const content = dialog.textContent.replace(/\s+/g, ' ').trim();
+                return {
+                  selector: dialog.className,
+                  content: content
+                };
+              }
             }
             return null;
           });
@@ -532,7 +543,10 @@ async function bookCar() {
           if (dialogResult) {
             console.log('浮動視窗內容：', dialogResult);
             
-            if (dialogResult.content.includes('已完成預約')) {
+            // 檢查成功訊息（考慮不同環境的文字格式）
+            if (dialogResult.content.includes('已完成預約') || 
+                dialogResult.content.includes('預約成功') ||
+                dialogResult.content.includes('預約完成')) {
               console.log(`在 ${dialogResult.selector} 中找到成功訊息`);
               success = true;
               
@@ -555,17 +569,29 @@ async function bookCar() {
                 fullPage: true 
               });
               
-              // 點擊關閉按鈕
+              // 點擊關閉按鈕（考慮不同環境的按鈕選擇器）
               await page.evaluate(() => {
-                const closeButton = document.querySelector('.dialog .button') ||
-                                  document.querySelector('.el-message-box__btns .el-button');
-                if (closeButton) {
-                  closeButton.click();
+                const buttonSelectors = [
+                  '.dialog .button',
+                  '.el-message-box__btns .el-button',
+                  '[class*="dialog"] [class*="button"]',
+                  '[class*="modal"] [class*="button"]'
+                ];
+                
+                for (const selector of buttonSelectors) {
+                  const button = document.querySelector(selector);
+                  if (button) {
+                    button.click();
+                    return;
+                  }
                 }
               });
               
               break;
-            } else if (dialogResult.content.includes('此時段無法預約')) {
+            } 
+            // 檢查錯誤訊息（考慮不同環境的文字格式）
+            else if (dialogResult.content.includes('此時段無法預約') || 
+                     dialogResult.content.includes('無法預約')) {
               console.log(`在 ${dialogResult.selector} 中找到錯誤訊息`);
               
               // 記錄失敗資訊
@@ -584,12 +610,21 @@ async function bookCar() {
                 fullPage: true 
               });
               
-              // 點擊確定按鈕
+              // 點擊確定按鈕（考慮不同環境的按鈕選擇器）
               await page.evaluate(() => {
-                const confirmButton = document.querySelector('.dialog .button') ||
-                                    document.querySelector('.el-message-box__btns .el-button');
-                if (confirmButton) {
-                  confirmButton.click();
+                const buttonSelectors = [
+                  '.dialog .button',
+                  '.el-message-box__btns .el-button',
+                  '[class*="dialog"] [class*="button"]',
+                  '[class*="modal"] [class*="button"]'
+                ];
+                
+                for (const selector of buttonSelectors) {
+                  const button = document.querySelector(selector);
+                  if (button) {
+                    button.click();
+                    return;
+                  }
                 }
               });
               
