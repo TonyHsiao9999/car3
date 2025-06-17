@@ -251,88 +251,91 @@ async function bookCar() {
 
         // 等待浮動視窗出現
         console.log('等待浮動視窗出現...\n');
-        try {
-          // 等待浮動視窗出現
-          await page.waitForSelector('.modal-dialog', { timeout: 10000 });
-          console.log('浮動視窗已出現！\n');
+        let confirmButton = null;
+        let maxRetries = 3;
+        let retryCount = 0;
 
-          // 等待確定按鈕出現
-          console.log('等待確定按鈕出現...\n');
-          const confirmButton = await page.waitForSelector('.modal-dialog a.button-fill.button-large.color_deep_main', { timeout: 10000 });
-          
-          if (confirmButton) {
-            console.log('找到確定按鈕，準備點擊...\n');
-            
-            // 確保按鈕可見和可點擊
-            const isConfirmVisible = await confirmButton.isVisible();
-            const isConfirmEnabled = await page.evaluate(button => {
-              return !button.disabled && !button.classList.contains('disabled');
-            }, confirmButton);
+        while (retryCount < maxRetries) {
+          try {
+            // 嘗試不同的選擇器
+            const selectors = [
+              '.modal-dialog a.button-fill.button-large.color_deep_main',
+              '.popup a.button-fill.button-large.color_deep_main',
+              'a.button-fill.button-large.color_deep_main'
+            ];
 
-            console.log(`確定按鈕狀態：可見=${isConfirmVisible}, 可點擊=${isConfirmEnabled}\n`);
-
-            if (!isConfirmVisible || !isConfirmEnabled) {
-              throw new Error('確定按鈕不可見或不可點擊');
+            for (const selector of selectors) {
+              try {
+                console.log(`嘗試尋找按鈕：${selector}\n`);
+                confirmButton = await page.waitForSelector(selector, { timeout: 5000 });
+                if (confirmButton) {
+                  const buttonText = await page.evaluate(el => el.textContent.trim(), confirmButton);
+                  console.log(`找到按鈕，文字為：${buttonText}\n`);
+                  if (buttonText === '確定') {
+                    console.log('找到確定按鈕！\n');
+                    break;
+                  }
+                }
+              } catch (error) {
+                console.log(`使用選擇器 ${selector} 未找到按鈕\n`);
+              }
             }
 
-            // 使用 JavaScript 點擊確定按鈕
-            await page.evaluate(button => {
-              button.click();
-            }, confirmButton);
-            
-            console.log('已點擊確定按鈕！\n');
-            await page.waitForTimeout(5000);
+            if (confirmButton) {
+              // 確保按鈕可見和可點擊
+              const isConfirmVisible = await confirmButton.isVisible();
+              const isConfirmEnabled = await page.evaluate(button => {
+                return !button.disabled && !button.classList.contains('disabled');
+              }, confirmButton);
 
-            // 等待頁面導航
-            console.log('等待頁面導航...\n');
-            await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
-              console.log('等待頁面導航超時，繼續執行...\n');
-            });
+              console.log(`確定按鈕狀態：可見=${isConfirmVisible}, 可點擊=${isConfirmEnabled}\n`);
 
-            // 檢查是否成功進入預約頁面
-            const isBookingPage = await page.evaluate(() => {
-              return window.location.href.includes('/ntpc/booking');
-            });
+              if (!isConfirmVisible || !isConfirmEnabled) {
+                throw new Error('確定按鈕不可見或不可點擊');
+              }
 
-            if (!isBookingPage) {
-              console.log('尚未進入預約頁面，等待頁面載入...\n');
-              await page.waitForTimeout(5000);
+              // 使用 JavaScript 點擊確定按鈕
+              await page.evaluate(button => {
+                button.click();
+              }, confirmButton);
               
-              // 再次檢查
-              const isBookingPageRetry = await page.evaluate(() => {
+              console.log('已點擊確定按鈕！\n');
+              await page.waitForTimeout(5000);
+
+              // 等待頁面導航
+              console.log('等待頁面導航...\n');
+              await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+                console.log('等待頁面導航超時，繼續執行...\n');
+              });
+
+              // 檢查是否成功進入預約頁面
+              const isBookingPage = await page.evaluate(() => {
                 return window.location.href.includes('/ntpc/booking');
               });
 
-              if (!isBookingPageRetry) {
-                throw new Error('無法進入預約頁面');
+              if (isBookingPage) {
+                console.log('成功進入預約頁面！\n');
+                break;
               }
             }
 
-            console.log('成功進入預約頁面！\n');
-          }
-        } catch (error) {
-          console.log('處理浮動視窗時發生錯誤：', error.message, '\n');
-          
-          // 嘗試尋找其他可能的浮動視窗
-          console.log('嘗試尋找其他可能的浮動視窗...\n');
-          try {
-            const popup = await page.waitForSelector('.popup', { timeout: 5000 });
-            if (popup) {
-              console.log('找到其他浮動視窗！\n');
-              const confirmButton = await page.waitForSelector('.popup a.button-fill.button-large.color_deep_main', { timeout: 5000 });
-              if (confirmButton) {
-                console.log('找到確定按鈕，準備點擊...\n');
-                await page.evaluate(button => {
-                  button.click();
-                }, confirmButton);
-                console.log('已點擊確定按鈕！\n');
-                await page.waitForTimeout(5000);
-              }
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log(`第 ${retryCount} 次重試...\n`);
+              await page.waitForTimeout(5000);
             }
-          } catch (retryError) {
-            console.log('找不到其他浮動視窗：', retryError.message, '\n');
-            throw error;
+          } catch (error) {
+            console.log(`第 ${retryCount + 1} 次嘗試失敗：${error.message}\n`);
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log('等待 5 秒後重試...\n');
+              await page.waitForTimeout(5000);
+            }
           }
+        }
+
+        if (retryCount >= maxRetries) {
+          throw new Error('無法進入預約頁面');
         }
 
         // 等待頁面載入完成
