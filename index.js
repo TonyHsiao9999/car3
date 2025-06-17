@@ -133,6 +133,46 @@ async function bookCar() {
             accuracy: 100 
         });
 
+        // 設定瀏覽器環境
+        await page.evaluateOnNewDocument(() => {
+          // 設定時區
+          Object.defineProperty(Intl, 'DateTimeFormat', {
+            value: function(...args) {
+              if (args.length === 0) {
+                args = [undefined, { timeZone: 'Asia/Taipei' }];
+              }
+              return new Intl.DateTimeFormat(...args);
+            },
+            writable: true,
+            configurable: true
+          });
+
+          // 設定語言
+          Object.defineProperty(navigator, 'language', {
+            get: function() {
+              return 'zh-TW';
+            }
+          });
+
+          Object.defineProperty(navigator, 'languages', {
+            get: function() {
+              return ['zh-TW', 'zh'];
+            }
+          });
+
+          // 設定螢幕大小
+          Object.defineProperty(window.screen, 'width', {
+            get: function() {
+              return 1920;
+            }
+          });
+          Object.defineProperty(window.screen, 'height', {
+            get: function() {
+              return 1080;
+            }
+          });
+        });
+
         // 監聽錯誤
         page.on('error', err => {
             console.error('頁面錯誤：', err);
@@ -484,8 +524,42 @@ async function bookCar() {
         console.error('系統偵錯資訊：', JSON.stringify(debugInfo, null, 2));
         console.error('=== 系統資訊結束 ===');
 
+        // 改進按鈕選擇邏輯
+        console.error('等待送出按鈕出現...');
+        await page.waitForFunction(
+          () => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const submitButton = buttons.find(btn => 
+              btn.textContent.includes('送出預約') || 
+              btn.textContent.includes('送出') ||
+              btn.className.includes('button-fill')
+            );
+            console.error('找到的按鈕：', submitButton ? {
+              text: submitButton.textContent,
+              class: submitButton.className,
+              type: submitButton.type,
+              disabled: submitButton.disabled
+            } : '沒有找到按鈕');
+            return submitButton;
+          },
+          { timeout: 30000 }
+        );
+
         // 點擊送出按鈕
-        await page.click('button.button-fill:nth-child(2)');
+        await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const submitButton = buttons.find(btn => 
+            btn.textContent.includes('送出預約') || 
+            btn.textContent.includes('送出') ||
+            btn.className.includes('button-fill')
+          );
+          if (submitButton) {
+            submitButton.click();
+          } else {
+            throw new Error('找不到送出按鈕');
+          }
+        });
+
         console.log('已點擊送出預約按鈕');
         await wait(2000);  // 等待 2 秒
 
