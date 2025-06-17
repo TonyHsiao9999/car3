@@ -209,9 +209,20 @@ async function bookCar() {
         await page.click('.dialog-button');
         await page.screenshot({ path: 'after_login_success.png', fullPage: true });
 
-        // 登入流程結束後立即 log cookies
-        const cookiesAfterLogin = await page.cookies();
-        console.error('登入後 cookies：', cookiesAfterLogin);
+        // 登入後立即截圖並轉為 Base64
+        const loginScreenshot = await page.screenshot({ encoding: 'base64', fullPage: true });
+        console.error('登入後畫面截圖（Base64）：');
+        console.error(loginScreenshot);
+        console.error('登入後 cookies：', await page.cookies());
+
+        // 記錄當前 URL 和頁面標題
+        const loginPageUrl = await page.url();
+        const loginPageTitle = await page.title();
+        console.error('登入後頁面資訊：', {
+          url: loginPageUrl,
+          title: loginPageTitle,
+          html: await page.content()
+        });
 
         // 點擊新增預約
         console.log('點擊新增預約按鈕...');
