@@ -183,8 +183,10 @@ async function bookCar() {
 
             // 嘗試多個可能的選擇器
             const selectors = [
-                'a.link:nth-child(2)',
+                'a.button.button-fill.button-large.color_deep_main',
+                'a.button-fill.button-large.color_deep_main',
                 'a.button-fill:nth-child(2)',
+                'a.link:nth-child(2)',
                 'a[href*="login"]',
                 'button[type="submit"]',
                 'input[type="submit"]',
@@ -238,7 +240,7 @@ async function bookCar() {
         // 點擊確認按鈕（如果存在）
         try {
             await retry(async () => {
-                const confirmButton = await page.waitForSelector('a.button-fill:nth-child(2)', { timeout: 5000 });
+                const confirmButton = await page.waitForSelector('a.button-fill.button-large.color_deep_main', { timeout: 5000 });
                 if (confirmButton) {
                     await confirmButton.click();
                     console.log('已點擊確認按鈕！');
@@ -254,11 +256,64 @@ async function bookCar() {
         // 點擊預約連結
         console.log('點擊預約連結...');
         await retry(async () => {
-            const bookingLink = await page.waitForSelector('a[href*="booking"]', { timeout: 60000 });
-            if (bookingLink) {
-                await bookingLink.click();
-                console.log('已點擊預約連結！');
-            } else {
+            // 先列出所有連結
+            const links = await page.$$('a');
+            console.log('找到連結數量：', links.length);
+            
+            for (const link of links) {
+                const text = await page.evaluate(el => el.textContent.trim(), link);
+                const href = await page.evaluate(el => el.href, link);
+                const className = await page.evaluate(el => el.className, link);
+                console.log('連結文字：', text);
+                console.log('連結 href：', href);
+                console.log('連結 class：', className);
+            }
+
+            // 嘗試多個可能的選擇器
+            const selectors = [
+                'a[href*="booking"]',
+                'a[href*="reservation"]',
+                'a[href*="appointment"]',
+                'a:contains("預約")',
+                'a:contains("訂車")',
+                'a:contains("叫車")'
+            ];
+
+            for (const selector of selectors) {
+                try {
+                    console.log('嘗試選擇器：', selector);
+                    const link = await page.waitForSelector(selector, { 
+                        timeout: 5000,
+                        visible: true 
+                    });
+                    
+                    if (link) {
+                        console.log('找到連結，使用選擇器：', selector);
+                        await link.click();
+                        console.log('已點擊預約連結！');
+                        return;
+                    }
+                } catch (error) {
+                    console.log('選擇器無效：', selector);
+                }
+            }
+
+            // 如果上述選擇器都失敗，嘗試用文字內容尋找
+            const bookingLink = await page.evaluate(() => {
+                const links = Array.from(document.querySelectorAll('a'));
+                const bookingLink = links.find(link => 
+                    link.textContent.includes('預約') || 
+                    link.textContent.includes('訂車') ||
+                    link.textContent.includes('叫車')
+                );
+                if (bookingLink) {
+                    bookingLink.click();
+                    return true;
+                }
+                return false;
+            });
+
+            if (!bookingLink) {
                 throw new Error('找不到預約連結');
             }
         });
