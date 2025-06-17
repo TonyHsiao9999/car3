@@ -182,9 +182,10 @@ async function bookCar() {
             // 點擊「民眾登入」按鈕
             console.log('點擊「民眾登入」按鈕...');
             const loginButton = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('a.button-fill.button-large.color_deep_main'));
+                const buttons = Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'));
                 const loginBtn = buttons.find(btn => btn.textContent.trim() === '民眾登入');
                 if (loginBtn) {
+                    console.log('找到登入按鈕：', loginBtn.outerHTML);
                     loginBtn.click();
                     return true;
                 }
@@ -192,43 +193,71 @@ async function bookCar() {
             });
             
             if (!loginButton) {
+                // 如果找不到按鈕，截圖並印出所有按鈕
+                await page.screenshot({ path: 'login_button_not_found.png', fullPage: true });
+                const buttonTexts = await page.evaluate(() => {
+                    return Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill'))
+                        .map(btn => ({
+                            text: btn.textContent.trim(),
+                            html: btn.outerHTML
+                        }));
+                });
+                console.log('頁面上的按鈕：', buttonTexts);
                 throw new Error('找不到「民眾登入」按鈕');
             }
             
             // 等待登入成功訊息
             console.log('等待登入成功訊息...');
-            let loginSuccess = false;
             try {
+                // 等待可能出現的登入成功訊息
                 await page.waitForFunction(
                     () => {
-                        const dialogText = document.querySelector('.dialog-text');
-                        return dialogText && dialogText.textContent.includes('登入成功');
+                        // 檢查是否有成功訊息
+                        const successDialog = document.querySelector('.dialog-text');
+                        if (successDialog && successDialog.textContent.includes('登入成功')) {
+                            return true;
+                        }
+                        
+                        // 檢查是否已經進入預約頁面（沒有登入表單）
+                        const loginForm = document.querySelector('input[type="text"], input[type="password"]');
+                        if (!loginForm) {
+                            return true;
+                        }
+                        
+                        return false;
                     },
                     { timeout: 15000 }
                 );
-                loginSuccess = true;
-                // 點擊確定按鈕
-                console.log('點擊確定按鈕...');
-                const confirmButton = await page.waitForSelector('.dialog-button', { visible: true });
+                
+                // 如果有成功訊息，點擊確定按鈕
+                const confirmButton = await page.evaluate(() => {
+                    const button = document.querySelector('.dialog-button');
+                    if (button) {
+                        button.click();
+                        return true;
+                    }
+                    return false;
+                });
+                
                 if (confirmButton) {
-                    await confirmButton.click();
+                    console.log('點擊確定按鈕...');
                     await new Promise(resolve => setTimeout(resolve, 3000));
                 }
             } catch (error) {
                 console.log('等待登入成功訊息時發生錯誤：', error.message);
-            }
-            // 無論成功或失敗都截圖
-            await page.screenshot({ path: 'login_result.png', fullPage: true });
-            // 印出所有 dialog-text 或錯誤訊息
-            const dialogs = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('.dialog-text')).map(e => e.textContent.trim());
-            });
-            if (dialogs.length > 0) {
-                console.log('畫面上所有 dialog-text：', dialogs);
-            } else {
-                console.log('畫面上沒有 dialog-text');
-            }
-            if (!loginSuccess) {
+                // 截圖並印出當前頁面狀態
+                await page.screenshot({ path: 'login_failed.png', fullPage: true });
+                const pageState = await page.evaluate(() => {
+                    return {
+                        hasLoginForm: !!document.querySelector('input[type="text"], input[type="password"]'),
+                        dialogText: Array.from(document.querySelectorAll('.dialog-text')).map(el => el.textContent.trim()),
+                        visibleButtons: Array.from(document.querySelectorAll('button, a, .dialog-button, .button-fill')).map(btn => ({
+                            text: btn.textContent.trim(),
+                            html: btn.outerHTML
+                        }))
+                    };
+                });
+                console.log('頁面狀態：', pageState);
                 throw new Error('登入失敗：無法確認登入狀態');
             }
         });
