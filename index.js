@@ -253,12 +253,12 @@ async function bookCar() {
         console.log('等待浮動視窗出現...\n');
         try {
           // 等待浮動視窗出現
-          await page.waitForSelector('.popup', { timeout: 10000 });
+          await page.waitForSelector('.modal-dialog', { timeout: 10000 });
           console.log('浮動視窗已出現！\n');
 
           // 等待確定按鈕出現
           console.log('等待確定按鈕出現...\n');
-          const confirmButton = await page.waitForSelector('.popup a.button-fill.button-large.color_deep_main', { timeout: 10000 });
+          const confirmButton = await page.waitForSelector('.modal-dialog a.button-fill.button-large.color_deep_main', { timeout: 10000 });
           
           if (confirmButton) {
             console.log('找到確定按鈕，準備點擊...\n');
@@ -283,6 +283,12 @@ async function bookCar() {
             console.log('已點擊確定按鈕！\n');
             await page.waitForTimeout(5000);
 
+            // 等待頁面導航
+            console.log('等待頁面導航...\n');
+            await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {
+              console.log('等待頁面導航超時，繼續執行...\n');
+            });
+
             // 檢查是否成功進入預約頁面
             const isBookingPage = await page.evaluate(() => {
               return window.location.href.includes('/ntpc/booking');
@@ -306,7 +312,27 @@ async function bookCar() {
           }
         } catch (error) {
           console.log('處理浮動視窗時發生錯誤：', error.message, '\n');
-          throw error;
+          
+          // 嘗試尋找其他可能的浮動視窗
+          console.log('嘗試尋找其他可能的浮動視窗...\n');
+          try {
+            const popup = await page.waitForSelector('.popup', { timeout: 5000 });
+            if (popup) {
+              console.log('找到其他浮動視窗！\n');
+              const confirmButton = await page.waitForSelector('.popup a.button-fill.button-large.color_deep_main', { timeout: 5000 });
+              if (confirmButton) {
+                console.log('找到確定按鈕，準備點擊...\n');
+                await page.evaluate(button => {
+                  button.click();
+                }, confirmButton);
+                console.log('已點擊確定按鈕！\n');
+                await page.waitForTimeout(5000);
+              }
+            }
+          } catch (retryError) {
+            console.log('找不到其他浮動視窗：', retryError.message, '\n');
+            throw error;
+          }
         }
 
         // 等待頁面載入完成
