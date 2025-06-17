@@ -668,12 +668,8 @@ async function bookCar() {
 
         // 1. 記錄 userAgent
         const userAgent = await page.evaluate(() => navigator.userAgent);
-        console.log('User-Agent:', userAgent);
-
         // 2. 記錄 cookies
         const cookies = await page.cookies();
-        console.log('Cookies:', cookies);
-
         // 3. 記錄所有表單資料
         const formData = await page.evaluate(() => {
           const data = {};
@@ -686,7 +682,16 @@ async function bookCar() {
           });
           return data;
         });
-        console.log('送出前的表單資料:', formData);
+        // 將 log 內容合併到錯誤訊息
+        let extraLog = '';
+        try {
+          extraLog = '\n[User-Agent] ' + userAgent +
+                     '\n[Cookies] ' + JSON.stringify(cookies) +
+                     '\n[FormData] ' + JSON.stringify(formData);
+        } catch (e) {
+          extraLog = '\n[Log merge error] ' + e.message;
+        }
+        console.error('發生錯誤：', error, extraLog);
     } catch (error) {
         console.error('發生錯誤：', error);
         if (browser) {
